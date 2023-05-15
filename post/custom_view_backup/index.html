@@ -1,0 +1,324 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>自定义View储备知识 | Mark&#39;s Blog</title>
+<link rel="shortcut icon" href="https://KanyeWestForReal.github.io//favicon.ico?v=1684155137033">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://KanyeWestForReal.github.io//styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="自定义View储备知识 | Mark&#39;s Blog - Atom Feed" href="https://KanyeWestForReal.github.io//atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="针对于上一次讲述了一些自定义View比较关键的API，以及引生出来的问题（直接在Activity中绘制）。
+这可能是前缀知识知识没有补充的关系，所以这篇笔记主要记录记录一些自定义View的底层知识。
+引入：从Actvity介绍View的渲染..." />
+    <meta name="keywords" content="" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://KanyeWestForReal.github.io/">
+  <img class="avatar" src="https://KanyeWestForReal.github.io//images/avatar.png?v=1684155137033" alt="">
+  </a>
+  <h1 class="site-title">
+    Mark&#39;s Blog
+  </h1>
+  <p class="site-description">
+    The key is thinking.
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              自定义View储备知识
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-05-08
+              </span>
+              <span>
+                9 min read
+              </span>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://KanyeWestForReal.github.io//post-images/custom_view_backup.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>针对于上一次讲述了一些<code>自定义View</code>比较关键的API，以及引生出来的问题（直接在Activity中绘制）。</p>
+<p>这可能是前缀知识知识没有补充的关系，所以这篇笔记主要记录记录一些自定义View的底层知识。</p>
+<h2 id="引入从actvity介绍view的渲染"><strong>引入：从Actvity介绍View的渲染</strong></h2>
+<p>如果我们想要明白一个View是如何渲染到Activity上的，那么就不可避免的需要去解析Activity的源码，在这里主要还是需要去看看关于View部分的，其他部分可以由大家来一起分享。</p>
+<p>首先，在当前版本中，大部分<code>Activity</code>还是会选择继承<code>AppCompatActivity</code>（以下简称ACA吧），作为向下兼容的选择。在实际中，Activity和ACA的代码还是有部分差异，这也是为了适配低版本。</p>
+<p>不过我们可以先用Android Studio的工具开看看，我们所见的屏幕分为什么层次。</p>
+<p>使用<code>LayoutInspector</code>，分析继承<code>AppCompatActivity</code>的视图：</p>
+<figure data-type="image" tabindex="1"><img src="https://KanyeWestForReal.github.io//post-images/1684153328447.png" alt="" loading="lazy"></figure>
+<p>使用<code>LayoutInspector</code>，分析继承<code>Activity</code>的视图：</p>
+<figure data-type="image" tabindex="2"><img src="https://KanyeWestForReal.github.io//post-images/1684153351564.png" alt="" loading="lazy"></figure>
+<p>这边对比分析看了下，都发现视图最外层还是DecorView。辨析一下ACA的不同之处：</p>
+<ol>
+<li>第四层开始不一样，是一个id为<code>action_bar_root</code>的<code>FitWindowsLinearLayout</code>的东西。看名字也是<code>LinearLayout</code>。</li>
+<li>第五层有一定相似之处，id为<code>action_mode_bar_stub</code>类型的<code>ViewStubCompat</code>和Activity第三层id为<code>action_mode_bar_stub</code>类型的<code>ViewStub</code>。下面的布局是<code>ContentFrameLayout</code>，毫无疑问也是<code>FrameLayout</code>的子类，和Activity的第三层一致，它的id是**<code>content</code>****。**</li>
+<li>第六层就是自己的XML。</li>
+</ol>
+<p>现在写的Ativity几乎都是继承<code>AppCompatActivity</code>的，作用是为了兼容。大家可能已经发现<code>AppCompatActivity</code>的<code>setContentView</code>方法点进去和Activity的不同，但是实际上还是大相径庭的。</p>
+<p>Activity：<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153511765.png" alt="" loading="lazy"></p>
+<p>AppCompatActivity：<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153506174.png" alt="" loading="lazy"></p>
+<p><strong>我们首先看看，<strong><strong><code>Activity的setContentView</code><strong><strong>作为一个基础，再去看看</strong></strong><code>ACA的setContentView</code></strong></strong>。</strong></p>
+<p>主要先看它的第一行，第二行明显是设置一个状态栏的，暂且不管。</p>
+<figure data-type="image" tabindex="3"><img src="https://KanyeWestForReal.github.io//post-images/1684153530044.png" alt="" loading="lazy"></figure>
+<p>getWindow方法返回了一个Window对象，这个Window对象实际上是在Activity的attach中绑定的。</p>
+<p>想要了解View是如何绘制在Activity前，我们需要知道，启动一个Activity的过程是怎么样的。</p>
+<p>Activitythread的<code>scheduleLaunchActivity</code>方法负责启动Activity，经过Handle处理执行到<code>handleLaunchActivity</code></p>
+<pre><code class="language-Java">Activity a = performLaunchActivity(r, customIntent);
+
+//这里面执行了Activity.onResume()
+handleResumeActivity(r.token, false, r.isForward,!r.activity.mFinished &amp;&amp; !r.startsNotResumed);
+</code></pre>
+<p><code>performLaunchActivity</code>会创建待启动Activity类的一个实例，并调用其attach方法进行初始化，然后调用Activity的<code>onCreate</code>,<code>onStart</code>等方法。</p>
+<p>可以看到<code>mWindow</code>实际上是一个<code>PhoneWindow</code>类型，其是<code>Window</code>的一个实现类。mWindow创建实例后，将当前Activity当回调设置了进去，主要用于一些事件的回调处理。</p>
+<figure data-type="image" tabindex="4"><img src="https://KanyeWestForReal.github.io//post-images/1684153601588.png" alt="" loading="lazy"></figure>
+<p>随后，<code>setWindowManager</code>主要是获得<code>系统的 WindowManager</code>，然后传给<code> PhoneWindow</code> ，最终，在 <code>PhoneWindow</code> 中持有了一个 <code>WindowManagerImpl</code> （WindowManager也是抽象类，其实现类是WMI）的引用。</p>
+<figure data-type="image" tabindex="5"><img src="https://KanyeWestForReal.github.io//post-images/1684153628482.png" alt="" loading="lazy"></figure>
+<p>由于<code>Window</code>的真正实现类型是PW，也就是它调用了<code>setContentView</code>方法，那么我们再去看看PW的具体代码。</p>
+<figure data-type="image" tabindex="6"><img src="https://KanyeWestForReal.github.io//post-images/1684153684844.png" alt="" loading="lazy"></figure>
+<p>在PW的<code>setContentView</code>方法中，看到了<code>mContentParent</code>这个变量，嗯？这个变量名是否有些眼熟。</p>
+<figure data-type="image" tabindex="7"><img src="https://KanyeWestForReal.github.io//post-images/1684153734096.png" alt="" loading="lazy"></figure>
+<p><img src="https://KanyeWestForReal.github.io//post-images/1684153770806.png" alt="" loading="lazy"><br>
+好家伙，其实我们可以猜测，<code>mContentParent</code>这玩意实际上就是分析视图中的<code>FrameLayout布局</code>，同时由第二处关键代码点得知，我们传入的layoutID被解析进入<code>mContentParent</code>。那么我们再认真看看源码论证一下。我们实际发现<code>mContentParent</code>的创建是在<code>installDecor</code>方法里，那么我们就看看<code>installDecor</code>方法。<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153852143.png" alt="" loading="lazy"></p>
+<p>我们可以看到，<code>mContentParent</code>是由<code>generateLayout</code>方法创建，其中传入了<code>mDecor</code>, 而<code>mDecor</code>由<code>generateDecor</code>生成，是<code>DecorView</code>类型。</p>
+<p><img src="https://KanyeWestForReal.github.io//post-images/1684153842198.png" alt="" loading="lazy"><br>
+到这里我们总结一下，我们使用的Activity的attach方法里绑定了一个<code>Window</code>, 也就是<code>PhoneWindow</code>。同时在PW里面会创建一个<code>DecorView</code>，然后<code>DecorView</code>调用<code>setWindow</code>绑定<code>Window</code>，之后根据不同features来选择不同容器，来初始化<code>mContentParent</code>。</p>
+<figure data-type="image" tabindex="8"><img src="https://KanyeWestForReal.github.io//post-images/1684153920220.png" alt="" loading="lazy"></figure>
+<ul>
+<li>这里的id常量<code>ID_ANDROID_CONTENT</code>点击去可以看到定义为<code>com.android.internal.R.id.content </code>所以<code>mContentParent</code>就是们的<strong>第三层</strong>id为<code>content</code>的帧布局。</li>
+<li>这里<code>findViewById</code>其实就是从<code>DecorView</code>中查找</li>
+</ul>
+<p>现在可以总结出一个图片大概是这样的，<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153935029.png" alt="" loading="lazy"></p>
+<p>到这里我们大概会明悟，Activity并不是作为我们可以看到的视图存在，他负责的是某些操作和回调的控制，绑定一个<code>PhoneWindow</code>, 而我们能看到的最顶层视图<code>DecorView</code>就是依附在<code>PhoneWindow</code>上。</p>
+<p><em><strong>这也就是为什么直接在Activity中绘制View，如果不添加进入Window中，什么也不会显示的原因。</strong></em></p>
+<p>不过，其实这时候DecorView是并没有被添加进入Window中的，虽然说绑定了Window，但是要在<code>Activity#onResume</code>中才会变得可见。</p>
+<blockquote>
+<p>为什么DecorView在onResume()之后才对用户可见呢？为什么DecorView绑定了Window却不添加进WIndow，需要后面WindowManager添加呢？<br>
+请详细思考这两个问题，在最后会进行补充。</p>
+</blockquote>
+<h2 id="深入view的呈现流程">深入：View的呈现流程</h2>
+<figure data-type="image" tabindex="9"><img src="https://KanyeWestForReal.github.io//post-images/1684153972014.png" alt="" loading="lazy"></figure>
+<p>我们来看看Activity的onRemune具体执行的方法，里面最关键的是<code>wm.addView(decor, l)</code>;</p>
+<p>其中wm是ViewManager一个接口，由<code>WindowManager</code>实现，<code>WindowManager</code>的实现又是<code>WindowManagerImpl</code>，但是WMI的实际实现又是交给<code>WindowManagerGlobal</code>去处理。<code>WindowMangerGlobal </code>是一个单例，每一个进程中只有一个对象</p>
+<figure data-type="image" tabindex="10"><img src="https://KanyeWestForReal.github.io//post-images/1684154146446.png" alt="" loading="lazy"></figure>
+<p>我们可以看到，在WMG的 <code>addView</code> 方法中，创建了一个最关键的<code>ViewRootImpl</code>对象，然后通过<code> ViewRootImpl 的 setView 方法</code>将 DecorView 添加到 WMS 中。</p>
+<figure data-type="image" tabindex="11"><img src="https://KanyeWestForReal.github.io//post-images/1684154166380.png" alt="" loading="lazy"></figure>
+<p>在setView方法中</p>
+<pre><code class="language-Java">public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView,
+   int userId) {
+       ...
+       requestLayout();
+       ...
+       try {
+       mWindowSession res =                         mWindowSession.addToDisplayAsUser(mWindow, mSeq, mWindowAttributes, getHostVisibility(), mDisplay.getDisplayId(), userId, mTmpFrame, mAttachInfo.mContentInsets, mAttachInfo.mStableInsets, mAttachInfo.mDisplayCutout, inputChannel, mTempInsets, mTempControls);setFrame(mTmpFrame); } 
+   }
+
+@Override 
+public void requestLayout() { 
+    if (!mHandlingLayoutInLayoutRequest){ 
+         checkThread();
+         mLayoutRequested = true; 
+         scheduleTraversals(); 
+     }
+  }
+</code></pre>
+<p>先是做了个刷新布局的操作，内部执行的<code>scheduleTraversals()</code> 就是View绘制的入口，调用此方法后 <code>ViewRootImpl </code>所关联的 View <strong>执行</strong> <code>measure - layout - draw </code>操作，确保在 View 被添加到 Window 上显示到屏幕之前，已经完成测量和绘制操作。</p>
+<figure data-type="image" tabindex="12"><img src="https://KanyeWestForReal.github.io//post-images/1684154393866.png" alt="" loading="lazy"></figure>
+<p>至此由<code>ViewRootImpl</code>完成了<strong>添加View到Window</strong>的操作。 然后将调用<code>mWindowSession</code>的<code>addToDisplayAsUser</code>方法来完成<strong>Window的添加过程</strong>，内部真实执行的地方在<strong>WMS（WindowManagerService).</strong></p>
+<p>总结一下，我们遇到一个新的ViewRootImpl类，它将DecorView和PhoneWindow<em><strong>组合</strong></em>起来（之前的**<code>DecorVIew#setWindow</code><strong><strong>方法实际上是可以</strong></strong><code>getWindow</code>**<strong>的前提，也可以理解为<em><strong><strong>绑定</strong></strong></em>起来</strong>）。同时我们需要明确的是，ViewRootImpl是整个VewTree的管理者，不是ViewTree其中的根结点或者一员。ViewRootImpl 是 DecorView 的 parent，但是他并不是一个真正的 View，只是继承了 ViewParent 接口，用来掌管 View 的各种事件，包括<code> requestLayout</code>、<code>invalidate</code>、<code>dispatchInputEvent </code>等等。</p>
+<blockquote>
+<p>ViewTree的概念</p>
+<figure data-type="image" tabindex="13"><img src="https://KanyeWestForReal.github.io//post-images/1684154186111.png" alt="" loading="lazy"></figure>
+</blockquote>
+<h2 id="回扣aca下view的渲染">回扣：ACA下View的渲染</h2>
+<p>我们主要还是看看ACA类中的setContentView这个方法，其中<code>getDelegate()</code>方法是需要重视，Delegate的中文意思是代理、代表？！这是不是很熟悉，很容易让我联想到之前在Retrofit中了解到的代理模式，点进去看看。</p>
+<figure data-type="image" tabindex="14"><img src="https://KanyeWestForReal.github.io//post-images/1684154248928.png" alt="" loading="lazy"></figure>
+<p><strong>XXX.create是不是特别熟悉，这就是之前介绍Retrofit的中代理模式啊。</strong></p>
+<p>再看看create返回了<code>AppCompatDelegateImpl</code>对象</p>
+<figure data-type="image" tabindex="15"><img src="https://KanyeWestForReal.github.io//post-images/1684154254437.png" alt="" loading="lazy"></figure>
+<p>进入<code>AppCompatDelegateImpl</code>里看看，和Activity内部一样，有一系列的setContentView方法重载，主要看看是加载XML文件的方法。</p>
+<figure data-type="image" tabindex="16"><img src="https://KanyeWestForReal.github.io//post-images/1684154261481.png" alt="" loading="lazy"></figure>
+<p>这个方法里实现了三件事：</p>
+<ul>
+<li><code>ensureSubDecor</code>可以猜测是对子DecorView进行创建初始化。</li>
+<li><strong>找到id为content的容器，清空原来子View,把我们写的<strong><strong>XML</strong></strong>添加进去</strong>（<strong>是不是很眼熟？</strong>）</li>
+<li>执行Activity的<code>onContentChanged</code>回调。</li>
+</ul>
+<p>我们主要还是看看<code>ensureSubDecor</code>方法，这个方法中比较关键的还得看看<code>createSubDecor</code>方法。</p>
+<figure data-type="image" tabindex="17"><img src="https://KanyeWestForReal.github.io//post-images/1684154420481.png" alt="" loading="lazy"></figure>
+<p>进入<code>createSubDecor</code>方法后，我们先分析前半部分，在重点标注前，都是对WIndow样式的一些处理，所以还是看蓝色标注处。</p>
+<figure data-type="image" tabindex="18"><img src="https://KanyeWestForReal.github.io//post-images/1684154430969.png" alt="" loading="lazy"></figure>
+<p>ensureWindow方法实际上是给Activity绑定PW，也是给mWindow初始化PW。</p>
+<p>我们就知道接下来和Activity类似了，getDecorView方法，实际上调用了insatllDeocor。</p>
+<figure data-type="image" tabindex="19"><img src="https://KanyeWestForReal.github.io//post-images/1684154525568.png" alt="" loading="lazy"></figure>
+<p>AppCompatActivity的setContentView方法虽然现在没有调用PhoneWindow的setContent方法，但是却把他的核心代码installDecor() 先给执行了。</p>
+<p>上面看完了ensureSubDecor的前半部分代码，我们再来看后半部分。</p>
+<figure data-type="image" tabindex="20"><img src="https://KanyeWestForReal.github.io//post-images/1684154548009.png" alt="" loading="lazy"></figure>
+<p>在PhoneWindow的generateLayout里也是根据主题给DecorView匹配使用的XML文件。这里是给subDecor这个匹配XML文件。</p>
+<p>我们再继续看</p>
+<figure data-type="image" tabindex="21"><img src="https://KanyeWestForReal.github.io//post-images/1684154573426.png" alt="" loading="lazy"></figure>
+<ol>
+<li>先是在刚刚看到的subDecor中找到了<strong>id为****<code>action_bar_activity_content</code><strong><strong>的</strong></strong><code>ContentFrameLayout</code><strong>定义为</strong><code>contentView</code></strong>。然后<strong>通过PW</strong>在我们熟悉的DecorView中找到了<strong>id为****<code>content</code><strong>容器，定义为</strong><code>windowContentView</code></strong>。</li>
+<li>把<strong>windowContentView内的所有View</strong>添加到<strong>contentView</strong>中，然后清空<strong>windowContentView。</strong></li>
+<li>把<strong>windowContentView</strong>的id置空，再将<strong>contentView</strong>设置id为<strong>content</strong>。</li>
+<li>删除<strong>contentView</strong>的前景</li>
+<li>将<strong>subDecor</strong>作为参数执行PhoneWindow的setContentView方法。接下来就会重复和Activity类似的事。</li>
+</ol>
+<p>总结一下，在Android 引入了 Material Design 的设计，为了支持 Material，Color、调色版、Toolbar等各种新特性，AppCompatActivity 就应用而生。AppCompatActivity 为了兼容以前的东西，就做了<strong>偷梁换柱</strong>，其中一个就是替换了以前 Activity 加载内容布局的父容器，即在<strong>原 DecorView 的 content 区域</strong>添加一个 SubDecor，我们通过 <strong>setContentView 设置的布局最终被添加到该 SubDecor 的 content 容器中</strong>，这样完成布局兼容操作。</p>
+<p>参考一下下图，就能很简单理解了。</p>
+<figure data-type="image" tabindex="22"><img src="https://KanyeWestForReal.github.io//post-images/1684154590519.webp" alt="" loading="lazy"></figure>
+<h2 id="总结">总结</h2>
+<p>二图以蔽之</p>
+<figure data-type="image" tabindex="23"><img src="https://KanyeWestForReal.github.io//post-images/1684154602552.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="24"><img src="https://KanyeWestForReal.github.io//post-images/1684154729983.png" alt="" loading="lazy"></figure>
+<h2 id="问题答案">问题答案</h2>
+<p>//TODO 😋</p>
+<h2 id="参考">参考</h2>
+<p>https://juejin.cn/post/6999144331340677150</p>
+<p>https://blog.csdn.net/zxm528/article/details/123134387?spm=1001.2014.3001.5501</p>
+<p>https://www.jianshu.com/p/8b7f075be3fc</p>
+<p>https://www.cnblogs.com/huansky/p/11911549.html</p>
+<p>https://carsonho.blog.csdn.net/article/details/91359867</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E5%BC%95%E5%85%A5%E4%BB%8Eactvity%E4%BB%8B%E7%BB%8Dview%E7%9A%84%E6%B8%B2%E6%9F%93"><strong>引入：从Actvity介绍View的渲染</strong></a></li>
+<li><a href="#%E6%B7%B1%E5%85%A5view%E7%9A%84%E5%91%88%E7%8E%B0%E6%B5%81%E7%A8%8B">深入：View的呈现流程</a></li>
+<li><a href="#%E5%9B%9E%E6%89%A3aca%E4%B8%8Bview%E7%9A%84%E6%B8%B2%E6%9F%93">回扣：ACA下View的渲染</a></li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+<li><a href="#%E9%97%AE%E9%A2%98%E7%AD%94%E6%A1%88">问题答案</a></li>
+<li><a href="#%E5%8F%82%E8%80%83">参考</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://KanyeWestForReal.github.io/post/custom_view/">
+              <h3 class="post-title">
+                自定义View入门知识
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  This blog is just for me to record the questions, which in my developing.
+  <a class="rss" href="https://KanyeWestForReal.github.io//atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

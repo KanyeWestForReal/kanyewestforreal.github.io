@@ -1,0 +1,2605 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://KanyeWestForReal.github.io/</id>
+    <title>Mark&apos;s Blog</title>
+    <updated>2023-05-15T12:52:19.497Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://KanyeWestForReal.github.io/"/>
+    <link rel="self" href="https://KanyeWestForReal.github.io/atom.xml"/>
+    <subtitle>The key is thinking.</subtitle>
+    <logo>https://KanyeWestForReal.github.io/images/avatar.png</logo>
+    <icon>https://KanyeWestForReal.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2023, Mark&apos;s Blog</rights>
+    <entry>
+        <title type="html"><![CDATA[自定义View储备知识]]></title>
+        <id>https://KanyeWestForReal.github.io/post/custom_view_backup/</id>
+        <link href="https://KanyeWestForReal.github.io/post/custom_view_backup/">
+        </link>
+        <updated>2023-05-08T01:22:53.000Z</updated>
+        <content type="html"><![CDATA[<p>针对于上一次讲述了一些<code>自定义View</code>比较关键的API，以及引生出来的问题（直接在Activity中绘制）。</p>
+<p>这可能是前缀知识知识没有补充的关系，所以这篇笔记主要记录记录一些自定义View的底层知识。</p>
+<h2 id="引入从actvity介绍view的渲染"><strong>引入：从Actvity介绍View的渲染</strong></h2>
+<p>如果我们想要明白一个View是如何渲染到Activity上的，那么就不可避免的需要去解析Activity的源码，在这里主要还是需要去看看关于View部分的，其他部分可以由大家来一起分享。</p>
+<p>首先，在当前版本中，大部分<code>Activity</code>还是会选择继承<code>AppCompatActivity</code>（以下简称ACA吧），作为向下兼容的选择。在实际中，Activity和ACA的代码还是有部分差异，这也是为了适配低版本。</p>
+<p>不过我们可以先用Android Studio的工具开看看，我们所见的屏幕分为什么层次。</p>
+<p>使用<code>LayoutInspector</code>，分析继承<code>AppCompatActivity</code>的视图：</p>
+<figure data-type="image" tabindex="1"><img src="https://KanyeWestForReal.github.io//post-images/1684153328447.png" alt="" loading="lazy"></figure>
+<p>使用<code>LayoutInspector</code>，分析继承<code>Activity</code>的视图：</p>
+<figure data-type="image" tabindex="2"><img src="https://KanyeWestForReal.github.io//post-images/1684153351564.png" alt="" loading="lazy"></figure>
+<p>这边对比分析看了下，都发现视图最外层还是DecorView。辨析一下ACA的不同之处：</p>
+<ol>
+<li>第四层开始不一样，是一个id为<code>action_bar_root</code>的<code>FitWindowsLinearLayout</code>的东西。看名字也是<code>LinearLayout</code>。</li>
+<li>第五层有一定相似之处，id为<code>action_mode_bar_stub</code>类型的<code>ViewStubCompat</code>和Activity第三层id为<code>action_mode_bar_stub</code>类型的<code>ViewStub</code>。下面的布局是<code>ContentFrameLayout</code>，毫无疑问也是<code>FrameLayout</code>的子类，和Activity的第三层一致，它的id是**<code>content</code>****。**</li>
+<li>第六层就是自己的XML。</li>
+</ol>
+<p>现在写的Ativity几乎都是继承<code>AppCompatActivity</code>的，作用是为了兼容。大家可能已经发现<code>AppCompatActivity</code>的<code>setContentView</code>方法点进去和Activity的不同，但是实际上还是大相径庭的。</p>
+<p>Activity：<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153511765.png" alt="" loading="lazy"></p>
+<p>AppCompatActivity：<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153506174.png" alt="" loading="lazy"></p>
+<p><strong>我们首先看看，<strong><strong><code>Activity的setContentView</code><strong><strong>作为一个基础，再去看看</strong></strong><code>ACA的setContentView</code></strong></strong>。</strong></p>
+<p>主要先看它的第一行，第二行明显是设置一个状态栏的，暂且不管。</p>
+<figure data-type="image" tabindex="3"><img src="https://KanyeWestForReal.github.io//post-images/1684153530044.png" alt="" loading="lazy"></figure>
+<p>getWindow方法返回了一个Window对象，这个Window对象实际上是在Activity的attach中绑定的。</p>
+<p>想要了解View是如何绘制在Activity前，我们需要知道，启动一个Activity的过程是怎么样的。</p>
+<p>Activitythread的<code>scheduleLaunchActivity</code>方法负责启动Activity，经过Handle处理执行到<code>handleLaunchActivity</code></p>
+<pre><code class="language-Java">Activity a = performLaunchActivity(r, customIntent);
+
+//这里面执行了Activity.onResume()
+handleResumeActivity(r.token, false, r.isForward,!r.activity.mFinished &amp;&amp; !r.startsNotResumed);
+</code></pre>
+<p><code>performLaunchActivity</code>会创建待启动Activity类的一个实例，并调用其attach方法进行初始化，然后调用Activity的<code>onCreate</code>,<code>onStart</code>等方法。</p>
+<p>可以看到<code>mWindow</code>实际上是一个<code>PhoneWindow</code>类型，其是<code>Window</code>的一个实现类。mWindow创建实例后，将当前Activity当回调设置了进去，主要用于一些事件的回调处理。</p>
+<figure data-type="image" tabindex="4"><img src="https://KanyeWestForReal.github.io//post-images/1684153601588.png" alt="" loading="lazy"></figure>
+<p>随后，<code>setWindowManager</code>主要是获得<code>系统的 WindowManager</code>，然后传给<code> PhoneWindow</code> ，最终，在 <code>PhoneWindow</code> 中持有了一个 <code>WindowManagerImpl</code> （WindowManager也是抽象类，其实现类是WMI）的引用。</p>
+<figure data-type="image" tabindex="5"><img src="https://KanyeWestForReal.github.io//post-images/1684153628482.png" alt="" loading="lazy"></figure>
+<p>由于<code>Window</code>的真正实现类型是PW，也就是它调用了<code>setContentView</code>方法，那么我们再去看看PW的具体代码。</p>
+<figure data-type="image" tabindex="6"><img src="https://KanyeWestForReal.github.io//post-images/1684153684844.png" alt="" loading="lazy"></figure>
+<p>在PW的<code>setContentView</code>方法中，看到了<code>mContentParent</code>这个变量，嗯？这个变量名是否有些眼熟。</p>
+<figure data-type="image" tabindex="7"><img src="https://KanyeWestForReal.github.io//post-images/1684153734096.png" alt="" loading="lazy"></figure>
+<p><img src="https://KanyeWestForReal.github.io//post-images/1684153770806.png" alt="" loading="lazy"><br>
+好家伙，其实我们可以猜测，<code>mContentParent</code>这玩意实际上就是分析视图中的<code>FrameLayout布局</code>，同时由第二处关键代码点得知，我们传入的layoutID被解析进入<code>mContentParent</code>。那么我们再认真看看源码论证一下。我们实际发现<code>mContentParent</code>的创建是在<code>installDecor</code>方法里，那么我们就看看<code>installDecor</code>方法。<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153852143.png" alt="" loading="lazy"></p>
+<p>我们可以看到，<code>mContentParent</code>是由<code>generateLayout</code>方法创建，其中传入了<code>mDecor</code>, 而<code>mDecor</code>由<code>generateDecor</code>生成，是<code>DecorView</code>类型。</p>
+<p><img src="https://KanyeWestForReal.github.io//post-images/1684153842198.png" alt="" loading="lazy"><br>
+到这里我们总结一下，我们使用的Activity的attach方法里绑定了一个<code>Window</code>, 也就是<code>PhoneWindow</code>。同时在PW里面会创建一个<code>DecorView</code>，然后<code>DecorView</code>调用<code>setWindow</code>绑定<code>Window</code>，之后根据不同features来选择不同容器，来初始化<code>mContentParent</code>。</p>
+<figure data-type="image" tabindex="8"><img src="https://KanyeWestForReal.github.io//post-images/1684153920220.png" alt="" loading="lazy"></figure>
+<ul>
+<li>这里的id常量<code>ID_ANDROID_CONTENT</code>点击去可以看到定义为<code>com.android.internal.R.id.content </code>所以<code>mContentParent</code>就是们的<strong>第三层</strong>id为<code>content</code>的帧布局。</li>
+<li>这里<code>findViewById</code>其实就是从<code>DecorView</code>中查找</li>
+</ul>
+<p>现在可以总结出一个图片大概是这样的，<br>
+<img src="https://KanyeWestForReal.github.io//post-images/1684153935029.png" alt="" loading="lazy"></p>
+<p>到这里我们大概会明悟，Activity并不是作为我们可以看到的视图存在，他负责的是某些操作和回调的控制，绑定一个<code>PhoneWindow</code>, 而我们能看到的最顶层视图<code>DecorView</code>就是依附在<code>PhoneWindow</code>上。</p>
+<p><em><strong>这也就是为什么直接在Activity中绘制View，如果不添加进入Window中，什么也不会显示的原因。</strong></em></p>
+<p>不过，其实这时候DecorView是并没有被添加进入Window中的，虽然说绑定了Window，但是要在<code>Activity#onResume</code>中才会变得可见。</p>
+<blockquote>
+<p>为什么DecorView在onResume()之后才对用户可见呢？为什么DecorView绑定了Window却不添加进WIndow，需要后面WindowManager添加呢？<br>
+请详细思考这两个问题，在最后会进行补充。</p>
+</blockquote>
+<h2 id="深入view的呈现流程">深入：View的呈现流程</h2>
+<figure data-type="image" tabindex="9"><img src="https://KanyeWestForReal.github.io//post-images/1684153972014.png" alt="" loading="lazy"></figure>
+<p>我们来看看Activity的onRemune具体执行的方法，里面最关键的是<code>wm.addView(decor, l)</code>;</p>
+<p>其中wm是ViewManager一个接口，由<code>WindowManager</code>实现，<code>WindowManager</code>的实现又是<code>WindowManagerImpl</code>，但是WMI的实际实现又是交给<code>WindowManagerGlobal</code>去处理。<code>WindowMangerGlobal </code>是一个单例，每一个进程中只有一个对象</p>
+<figure data-type="image" tabindex="10"><img src="https://KanyeWestForReal.github.io//post-images/1684154146446.png" alt="" loading="lazy"></figure>
+<p>我们可以看到，在WMG的 <code>addView</code> 方法中，创建了一个最关键的<code>ViewRootImpl</code>对象，然后通过<code> ViewRootImpl 的 setView 方法</code>将 DecorView 添加到 WMS 中。</p>
+<figure data-type="image" tabindex="11"><img src="https://KanyeWestForReal.github.io//post-images/1684154166380.png" alt="" loading="lazy"></figure>
+<p>在setView方法中</p>
+<pre><code class="language-Java">public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView,
+   int userId) {
+       ...
+       requestLayout();
+       ...
+       try {
+       mWindowSession res =                         mWindowSession.addToDisplayAsUser(mWindow, mSeq, mWindowAttributes, getHostVisibility(), mDisplay.getDisplayId(), userId, mTmpFrame, mAttachInfo.mContentInsets, mAttachInfo.mStableInsets, mAttachInfo.mDisplayCutout, inputChannel, mTempInsets, mTempControls);setFrame(mTmpFrame); } 
+   }
+
+@Override 
+public void requestLayout() { 
+    if (!mHandlingLayoutInLayoutRequest){ 
+         checkThread();
+         mLayoutRequested = true; 
+         scheduleTraversals(); 
+     }
+  }
+</code></pre>
+<p>先是做了个刷新布局的操作，内部执行的<code>scheduleTraversals()</code> 就是View绘制的入口，调用此方法后 <code>ViewRootImpl </code>所关联的 View <strong>执行</strong> <code>measure - layout - draw </code>操作，确保在 View 被添加到 Window 上显示到屏幕之前，已经完成测量和绘制操作。</p>
+<figure data-type="image" tabindex="12"><img src="https://KanyeWestForReal.github.io//post-images/1684154393866.png" alt="" loading="lazy"></figure>
+<p>至此由<code>ViewRootImpl</code>完成了<strong>添加View到Window</strong>的操作。 然后将调用<code>mWindowSession</code>的<code>addToDisplayAsUser</code>方法来完成<strong>Window的添加过程</strong>，内部真实执行的地方在<strong>WMS（WindowManagerService).</strong></p>
+<p>总结一下，我们遇到一个新的ViewRootImpl类，它将DecorView和PhoneWindow<em><strong>组合</strong></em>起来（之前的**<code>DecorVIew#setWindow</code><strong><strong>方法实际上是可以</strong></strong><code>getWindow</code>**<strong>的前提，也可以理解为<em><strong><strong>绑定</strong></strong></em>起来</strong>）。同时我们需要明确的是，ViewRootImpl是整个VewTree的管理者，不是ViewTree其中的根结点或者一员。ViewRootImpl 是 DecorView 的 parent，但是他并不是一个真正的 View，只是继承了 ViewParent 接口，用来掌管 View 的各种事件，包括<code> requestLayout</code>、<code>invalidate</code>、<code>dispatchInputEvent </code>等等。</p>
+<blockquote>
+<p>ViewTree的概念</p>
+<figure data-type="image" tabindex="13"><img src="https://KanyeWestForReal.github.io//post-images/1684154186111.png" alt="" loading="lazy"></figure>
+</blockquote>
+<h2 id="回扣aca下view的渲染">回扣：ACA下View的渲染</h2>
+<p>我们主要还是看看ACA类中的setContentView这个方法，其中<code>getDelegate()</code>方法是需要重视，Delegate的中文意思是代理、代表？！这是不是很熟悉，很容易让我联想到之前在Retrofit中了解到的代理模式，点进去看看。</p>
+<figure data-type="image" tabindex="14"><img src="https://KanyeWestForReal.github.io//post-images/1684154248928.png" alt="" loading="lazy"></figure>
+<p><strong>XXX.create是不是特别熟悉，这就是之前介绍Retrofit的中代理模式啊。</strong></p>
+<p>再看看create返回了<code>AppCompatDelegateImpl</code>对象</p>
+<figure data-type="image" tabindex="15"><img src="https://KanyeWestForReal.github.io//post-images/1684154254437.png" alt="" loading="lazy"></figure>
+<p>进入<code>AppCompatDelegateImpl</code>里看看，和Activity内部一样，有一系列的setContentView方法重载，主要看看是加载XML文件的方法。</p>
+<figure data-type="image" tabindex="16"><img src="https://KanyeWestForReal.github.io//post-images/1684154261481.png" alt="" loading="lazy"></figure>
+<p>这个方法里实现了三件事：</p>
+<ul>
+<li><code>ensureSubDecor</code>可以猜测是对子DecorView进行创建初始化。</li>
+<li><strong>找到id为content的容器，清空原来子View,把我们写的<strong><strong>XML</strong></strong>添加进去</strong>（<strong>是不是很眼熟？</strong>）</li>
+<li>执行Activity的<code>onContentChanged</code>回调。</li>
+</ul>
+<p>我们主要还是看看<code>ensureSubDecor</code>方法，这个方法中比较关键的还得看看<code>createSubDecor</code>方法。</p>
+<figure data-type="image" tabindex="17"><img src="https://KanyeWestForReal.github.io//post-images/1684154420481.png" alt="" loading="lazy"></figure>
+<p>进入<code>createSubDecor</code>方法后，我们先分析前半部分，在重点标注前，都是对WIndow样式的一些处理，所以还是看蓝色标注处。</p>
+<figure data-type="image" tabindex="18"><img src="https://KanyeWestForReal.github.io//post-images/1684154430969.png" alt="" loading="lazy"></figure>
+<p>ensureWindow方法实际上是给Activity绑定PW，也是给mWindow初始化PW。</p>
+<p>我们就知道接下来和Activity类似了，getDecorView方法，实际上调用了insatllDeocor。</p>
+<figure data-type="image" tabindex="19"><img src="https://KanyeWestForReal.github.io//post-images/1684154525568.png" alt="" loading="lazy"></figure>
+<p>AppCompatActivity的setContentView方法虽然现在没有调用PhoneWindow的setContent方法，但是却把他的核心代码installDecor() 先给执行了。</p>
+<p>上面看完了ensureSubDecor的前半部分代码，我们再来看后半部分。</p>
+<figure data-type="image" tabindex="20"><img src="https://KanyeWestForReal.github.io//post-images/1684154548009.png" alt="" loading="lazy"></figure>
+<p>在PhoneWindow的generateLayout里也是根据主题给DecorView匹配使用的XML文件。这里是给subDecor这个匹配XML文件。</p>
+<p>我们再继续看</p>
+<figure data-type="image" tabindex="21"><img src="https://KanyeWestForReal.github.io//post-images/1684154573426.png" alt="" loading="lazy"></figure>
+<ol>
+<li>先是在刚刚看到的subDecor中找到了<strong>id为****<code>action_bar_activity_content</code><strong><strong>的</strong></strong><code>ContentFrameLayout</code><strong>定义为</strong><code>contentView</code></strong>。然后<strong>通过PW</strong>在我们熟悉的DecorView中找到了<strong>id为****<code>content</code><strong>容器，定义为</strong><code>windowContentView</code></strong>。</li>
+<li>把<strong>windowContentView内的所有View</strong>添加到<strong>contentView</strong>中，然后清空<strong>windowContentView。</strong></li>
+<li>把<strong>windowContentView</strong>的id置空，再将<strong>contentView</strong>设置id为<strong>content</strong>。</li>
+<li>删除<strong>contentView</strong>的前景</li>
+<li>将<strong>subDecor</strong>作为参数执行PhoneWindow的setContentView方法。接下来就会重复和Activity类似的事。</li>
+</ol>
+<p>总结一下，在Android 引入了 Material Design 的设计，为了支持 Material，Color、调色版、Toolbar等各种新特性，AppCompatActivity 就应用而生。AppCompatActivity 为了兼容以前的东西，就做了<strong>偷梁换柱</strong>，其中一个就是替换了以前 Activity 加载内容布局的父容器，即在<strong>原 DecorView 的 content 区域</strong>添加一个 SubDecor，我们通过 <strong>setContentView 设置的布局最终被添加到该 SubDecor 的 content 容器中</strong>，这样完成布局兼容操作。</p>
+<p>参考一下下图，就能很简单理解了。</p>
+<figure data-type="image" tabindex="22"><img src="https://KanyeWestForReal.github.io//post-images/1684154590519.webp" alt="" loading="lazy"></figure>
+<h2 id="总结">总结</h2>
+<p>二图以蔽之</p>
+<figure data-type="image" tabindex="23"><img src="https://KanyeWestForReal.github.io//post-images/1684154602552.png" alt="" loading="lazy"></figure>
+<figure data-type="image" tabindex="24"><img src="https://KanyeWestForReal.github.io//post-images/1684154729983.png" alt="" loading="lazy"></figure>
+<h2 id="问题答案">问题答案</h2>
+<p>//TODO 😋</p>
+<h2 id="参考">参考</h2>
+<p>https://juejin.cn/post/6999144331340677150</p>
+<p>https://blog.csdn.net/zxm528/article/details/123134387?spm=1001.2014.3001.5501</p>
+<p>https://www.jianshu.com/p/8b7f075be3fc</p>
+<p>https://www.cnblogs.com/huansky/p/11911549.html</p>
+<p>https://carsonho.blog.csdn.net/article/details/91359867</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[自定义View入门知识]]></title>
+        <id>https://KanyeWestForReal.github.io/post/custom_view/</id>
+        <link href="https://KanyeWestForReal.github.io/post/custom_view/">
+        </link>
+        <updated>2023-04-19T12:47:15.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="前言">前言</h2>
+<figure data-type="image" tabindex="1"><img src="https://KanyeWestForReal.github.io//post-images/1681908551948.jpeg" alt="" loading="lazy"></figure>
+<p>这篇文章主要目的是记录原生自定义View与<code>Compose</code>的一些笔记，同时为了适应<code>Kotlin</code>，全文尽量选择使用<code>Kotlin</code>作为记录。</p>
+<p>关于原生的自定义<code>View</code>，在<code>Compose</code>出来以后，还有没有必要学习？这是一个比较有争议的问题，<em><strong>我的评价是，建议都学😋</strong></em>。</p>
+<p>且听我细说：一、即使<code>Compose自定义View</code>相对于<code>原生的自定义View</code>过程，十分不同，但是一部分<code>Compose自定义View</code>也会需要原生的知识，<code>Compose</code> 目前还不支持的绘制功能，比如绘制文字，可以通过 <code>drawIntoCanvas</code> 方法拿到原生 <code>Android</code> 环境的 <code>Canvas</code> 和 <code>Paint</code> 对象，利用原生 <code>Android</code> 环境的 <code>API</code> 方法来实现部分绘制需求。</p>
+<p>二、即使<code>Compose</code>发布了几年，实际上还是有一部分公司的UI是基于<code>原生View</code>的。你写新代码当然可以选择 <code>Compose</code>，但是老代码维护的时候还是要和 <code>View</code> 打交道呀。</p>
+<p>三、由于<code>Compose</code> 是基于 <code>View</code> 系统的，它的原理是通过一个自定义的 <code>View</code>，去对它的 <code>onMeasure()</code>、<code>onLayout()</code>、<code>onDraw()</code>、<code>dispatchTouchEvent()</code>，在遇到一些<code>Compose</code>无法解决的问题时，我们还是需要原始View的知识去解决。</p>
+<blockquote>
+<p>同时由于上次的Retrofit问题，我决定减少篇幅，选择比较重要的点列出，比如感悟和经验，减少解析源码部分。让这篇文章偏向笔记化。</p>
+</blockquote>
+<h2 id="原生自定义view基础知识">原生自定义View基础知识</h2>
+<h3 id="前言-2">前言</h3>
+<h4 id="自定义view的分类">自定义View的分类</h4>
+<ul>
+<li>自定义组合控件 			多个控件组合成为一个新的控件，方便多处复用</li>
+<li>继承系统View控件 		继承自TextView等系统控件，在系统控件的基础功能上进行扩展</li>
+<li>继承View 			  		不复用系统控件逻辑，继承View进行功能定义</li>
+<li>继承系统ViewGroup 	 继承自LinearLayout等系统控件，在系统控件的基础功能上进行扩展</li>
+<li>继承ViewGroup 	        不复用系统控件逻辑，继承ViewGroup进行功能定义</li>
+</ul>
+<p>在<code>原生的 Android View</code> 体系下，我们要实现一个<code>自定义 View</code> 所需要的基本步骤有：</p>
+<ul>
+<li>继承 <code>android.view.View</code>/<code>ViewGroup</code>（<em><strong>或者某些现成的组件</strong></em>），在子类的构造函数中通过 <code>AttributeSet</code> 拿到在 <em><strong>XML 文件</strong></em>中声明的各个属性值</li>
+<li>重写 <code>onMeasure</code> 和 <code>onSizeChanged</code> 两个方法，拿到 <code>View</code> 的宽高信息 （<em><strong>测</strong></em>）</li>
+<li>重写 <code>onLayout</code> 方法，确定<code>子 View</code> 的位置信息（如果是<em><strong>自定义 ViewGroup</strong></em> 的话）（<em><strong>布</strong></em>）</li>
+<li>重写 <code>onDraw</code> 方法，通过 <code>Paint</code>、<code>Path</code> 等在 <code>Canvas</code> 绘制图形，从而实现各种自定义效果 （<em><strong>画</strong></em>）</li>
+<li>重写 <code>onVisibilityChanged</code>、<code>onAttachedToWindow</code>、<code>onDetachedFromWindow</code> 等方法，在适当的时候开启动画或者停止动画，避免资源浪费和内存泄漏（<em><strong>如果有使用到 Animator 的话</strong></em>）</li>
+<li>重写<code>dispatchTouchEvent</code>、<code>onInterceptTouchEvent</code>、onTouchEvent等方法，完成对用户操作的正确回馈。</li>
+</ul>
+<p>在这篇笔记里主要记录一下自定义View的三大基本方法，最终目的就是能达到对原生自定义View的基本了解和使用，实际上<em><strong>真正重要的是Compose的相关学习</strong></em>。</p>
+<p>不过接下来，先从<em><strong>最重要的</strong></em>讲起——<em><strong>画，也就是绘制</strong></em>。</p>
+<blockquote>
+<p>Tips:记得关闭硬件加速</p>
+</blockquote>
+<h3 id="绘制">绘制</h3>
+<h4 id="一切的开始ondraw">一切的开始：onDraw()</h4>
+<p>自定义View的绘制上手非常容易：在初始化方法中提前创建好 <code>Paint</code> 对象，重写 <code>onDraw()</code>，把绘制代码写在 <code>onDraw()</code> 里面，就是自定义绘制最基本的实现。</p>
+<p>Tips：为什么我们不在<code>onDraw方法</code>中初始化对象，或者进行耗时操作？因为<code>onDraw方法</code>会不断的被调用，这时候就会出现一个十分高大的词语——<strong>内存抖动</strong>。</p>
+<figure data-type="image" tabindex="2"><img src="https://KanyeWestForReal.github.io//post-images/1681908598819.png" alt="" loading="lazy"></figure>
+<p>我们在 <code>onDraw()</code> 里创建的对象往往是绘制相关的对象，而这些对象又经常会包含通往<code>系统下层的 Native 对象</code>的引用，这就导致在 onDraw() 里创建对象所导致的内存回收的耗时往往会更高，直白地说就是——<em><strong>界面更卡顿</strong></em>。</p>
+<p>回到正题，</p>
+<pre><code class="language-kotlin">class PractiseView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0)
+    : View(context, attrs, defStyleAttr) {
+
+    private val mContext : Context = context
+
+    private var paint : Paint = Paint()
+      
+    override fun onDraw(canvas: Canvas?) {
+      	//唯一需要注意的是别漏写了 super.onDraw()。
+        super.onDraw(canvas)
+        
+        //画个圆
+        canvas?.drawCircle(200f, 200f, 100f, paint)
+      	//drawCircle(float centerX, float centerY, float radius, Paint paint) 画圆
+      	// 前两个参数 centerX centerY 是圆心的坐标，
+        // 第三个参数 radius 是圆的半径，单位都是像素，它们共同构成了这个圆的基本信息
+        // 第四个参数 paint提供基本信息之外的所有风格信息，例如颜色、线条粗细、阴影等。
+      	
+    }
+
+
+}
+</code></pre>
+<p>我们先来分析下，<code>Canvas</code>类里面有大量的<code>drawXXX()</code>方法，如果我们知道<em><strong>Canvas的翻译是画布</strong></em>，那么就很简单理解了。</p>
+<h4 id="canvasdrawxxx常见方法">Canvas.drawXXX常见方法</h4>
+<h5 id="颜色填充">颜色填充</h5>
+<p><code>drawColor(@ColorInt int color)</code></p>
+<p><code>drawRGB(int r, int g, int b)</code></p>
+<p><code>drawARGB(int a, int r, int g, int b)</code></p>
+<blockquote>
+<p>a代表透明度</p>
+<p>给整个画布填充颜色</p>
+<p>如果最后调用，会直接覆盖</p>
+</blockquote>
+<pre><code class="language-kotlin">         paint.color = Color.BLACK
+         canvas?.drawColor(Color.RED)
+         canvas?.drawRect(200f, 100f, 400f,200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://KanyeWestForReal.github.io//post-images/1681908650038.png" alt="" loading="lazy"></figure>
+<h5 id="画圆">画圆</h5>
+<p><code>drawCircle(float centerX, float centerY, float radius, Paint paint)</code></p>
+<h5 id="画-bitmap">画 Bitmap</h5>
+<p><code>drawBitmap(Bitmap bitmap, float left, float top, Paint paint)</code></p>
+<blockquote>
+<p>绘制 <code>Bitmap</code> 对象，也就是把这个 <code>Bitmap</code> 中的像素内容贴过来。其中 <code>left</code> 和 <code>top</code> 是要把 <code>bitmap</code> 绘制到的位置坐标。</p>
+</blockquote>
+<h5 id="画矩形">画矩形</h5>
+<p><code>drawRect(float left, float top, float right, float bottom, Paint paint)</code></p>
+<blockquote>
+<p><em><strong><code>left</code>, <code>top</code>, <code>right</code>, <code>bottom</code> 是这个椭圆的左、上、右、下四个边界点的坐标。</strong></em></p>
+<p>left, right 的值是相对于x轴的</p>
+<p>top, bottom 的值是相对于y轴的</p>
+<p>例子：</p>
+</blockquote>
+<p>我们可以发现left的值是等于top的值，却能生成以下正常的椭圆</p>
+<pre><code class="language-kotlin">canvas?.drawCircle(100f, 100f, 50f ,paint)
+canvas?.drawArc(200f, 200f, 800f, 500f, 100f, 100f, true, paint)
+paint.color = Color.BLACK
+paint.alpha = 100
+canvas?.drawOval(200f,200f, 800f, 500f, paint)
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://KanyeWestForReal.github.io//post-images/1681908675395.png" alt="" loading="lazy"></figure>
+<h5 id="画点">画点</h5>
+<p><code>drawPoint(float x, float y, Paint paint)</code></p>
+<p><code>drawPoints(float[] pts, Paint paint) 批量画点</code></p>
+<blockquote>
+<p><code>pts</code> 这个数组是点的坐标，每两个成一对</p>
+</blockquote>
+<p><code>drawPoints(float[] pts, int offset, int count, Paint paint)</code></p>
+<blockquote>
+<p>批量画点。</p>
+<p><code>offset</code>代表跳过<code>pts</code>数组中前几个数再开始记坐标）</p>
+<p>可以实现<em><strong>间隔变化的点绘制</strong></em></p>
+</blockquote>
+<h5 id="画椭圆">画椭圆</h5>
+<p><code>drawOval(float left, float top, float right, float bottom, Paint paint)</code></p>
+<h5 id="画线">画线</h5>
+<p><code>drawLine(float startX, float startY, float stopX, float stopY, Paint paint)</code></p>
+<blockquote>
+<p><code>startX</code>, <code>startY</code>, <code>stopX</code>, <code>stopY</code> 分别是线的起点和终点坐标。</p>
+</blockquote>
+<p><code>drawLines(float[] pts, Paint paint)</code></p>
+<p><code>drawLines(float[] pts, int offset, int count, Paint paint)</code></p>
+<blockquote>
+<p>画线（批量）</p>
+<p>可以实现<em><strong>间隔变化的线绘制</strong></em></p>
+</blockquote>
+<h5 id="画圆角矩形">画圆角矩形</h5>
+<p><code>drawRoundRect(float left, float top, float right, float bottom, float rx, float ry, Paint paint)</code></p>
+<blockquote>
+<p><code>left</code>, <code>top</code>, <code>right</code>, <code>bottom</code> 是四条边的坐标，<code>rx</code> 和 <code>ry</code> 是圆角的横向半径和纵向半径。</p>
+</blockquote>
+<h5 id="绘制弧形或扇形">绘制弧形或扇形</h5>
+<p>drawArc(float left, float top, float right, float bottom, float startAngle, float sweepAngle, boolean useCenter, Paint paint)</p>
+<blockquote>
+<p><code>drawArc()</code> 是使用一个椭圆来描述弧形的。</p>
+<p><code>left</code>, <code>top</code>, <code>right</code>, <code>bottom</code> 描述的是这个弧形所在的椭圆；<code>startAngle</code> 是弧形的起始角度（x 轴的正向，即正右的方向，是 0 度的位置；顺时针为正角度，逆时针为负角度），<code>sweepAngle</code> 是弧形划过的角度；<em><strong><code>useCenter</code> 表示是否连接到圆心，如果不连接到圆心，就是弧形，如果连接到圆心，就是扇形。</strong></em></p>
+</blockquote>
+<h5 id="绘制文字">绘制文字</h5>
+<p><code>drawText(String text, float x, float y, Paint paint)</code></p>
+<blockquote>
+<p>参数 <code>text</code> 是用来绘制的字符串，<code>x</code> 和 <code>y</code> 是绘制的起点坐标。</p>
+</blockquote>
+<h5 id="画自定义图形">画自定义图形</h5>
+<p><code>drawPath(Path path, Paint paint)</code></p>
+<blockquote>
+<p><code>drawPath()</code> 可以绘制自定义图形。当你要绘制的图形比较特殊，使用前面的那些方法做不到的时候，就可以使用 <code>drawPath()</code> 来绘制。</p>
+<figure data-type="image" tabindex="5"><img src="https://KanyeWestForReal.github.io//post-images/1681908712664.jpeg" alt="" loading="lazy"></figure>
+</blockquote>
+<p><code>drawPath</code>可以说是最重要的方法之一，实际上一些非特定的<code>View</code>，其实是可以通过继承系统控件魔改，或者是组合各种系统控件完成。而那些十分帅气（花里胡哨）的控件，基本上是使用<code>drawPath</code>相关方法绘制的。</p>
+<p>Path 可以描述直线、二次曲线、三次曲线、圆、椭圆、弧形、矩形、圆角矩形。把这些图形结合起来，就可以描述出很多复杂的图形。Path 可以归结为两类方法：</p>
+<ul>
+<li>
+<p>直接描述路径，也可以分为两组：</p>
+<ul>
+<li>
+<p>添加子图形：<code>addXXX()</code>, 此类方法在特定情况下几个 <code>Canvas.drawPath()</code> 等同于 <code>Canvas.drawXXX()</code>。</p>
+</li>
+<li>
+<p>画直线或曲线：<code>xxxTo()</code>: 这一组和第一组 <code>addXxx()</code> 方法的区别在于，第一组是添加的完整封闭图形（除了 <code>addPath()</code> ），而这一组添加的只是一条线。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>辅助设置或计算： <code>Path.setFillType(Path.FillType ft)</code> 设置填充方式，由于比较少使用不进行介绍。</p>
+<p>可以参考https://juejin.cn/post/7067012239223422983这篇文章。</p>
+</li>
+</ul>
+<p>这里面主要介绍<em><strong>Path的画直、曲线的方法</strong></em>：</p>
+<p><strong>lineTo(float x, float y) / rLineTo(float x, float y) 画直线</strong></p>
+<p>从<strong>当前位置</strong>向目标位置画一条直线， <code>x</code> 和 <code>y</code> 是目标位置的坐标。这两个方法的区别是，<code>lineTo(x, y)</code> 的参数是<strong>绝对坐标</strong>，而 <code>rLineTo(x, y)</code> 的参数是相对当前位置的<strong>相对坐标</strong> 。</p>
+<blockquote>
+<p><strong>当前位置</strong>：所谓当前位置，即最后一次调用画 <code>Path</code> 的方法的终点位置。初始值为原点 (0, 0)。</p>
+</blockquote>
+<pre><code class="language-kotlin">paint.style = Style.STROKE
+path.lineTo(100, 100) // 由当前位置 (0, 0) 向 (100, 100) 画一条直线
+path.rLineTo(100, 0) // 由当前位置 (100, 100) 向正右方 100 像素的位置画一条直线
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://KanyeWestForReal.github.io//post-images/1681908732244.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong><code>quadTo(float x1, float y1, float x2, float y2) / rQuadTo(float dx1, float dy1, float dx2, float dy2) 绘制二次贝塞尔曲线</code></strong></em></p>
+<p>这条二次贝塞尔曲线的起点就是当前位置，而参数中的 <code>x1</code>, <code>y1</code> 和 <code>x2</code>, <code>y2</code> 则分别是控制点和终点的坐标。和 <code>rLineTo(x, y)</code> 同理，<code>rQuadTo(dx1, dy1, dx2, dy2)</code> 的参数也是<em><strong>相对坐标</strong></em></p>
+<p><em><strong><code>cubicTo(float x1, float y1, float x2, float y2, float x3, float y3) /rCubicTo(float x1, float y1, float x2, float y2, float x3, float y3)</code></strong></em> <em><strong>绘制三次贝塞尔曲线</strong></em></p>
+<p>这条三次贝塞尔曲线的起点就是当前位置，而参数中的 <code>x1</code>, <code>y1</code>  <code>x2</code>, <code>y2</code> 是控制点坐标,<code>x3,</code>y3是终点的坐标。和 <code>rLineTo(x, y)</code> 同理，<code>rCubicTo(dx1, dy1, dx2, dy2, dx3, dy3)</code> 的参数也是<em><strong>相对坐标</strong></em></p>
+<blockquote>
+<p><em><strong>使用它们可以绘制很多圆润又好看的图形,这也是Path最重要的方法。</strong></em></p>
+</blockquote>
+<p>简单介绍一下<em><strong>Path的一些基本方法</strong></em>:</p>
+<p>这里就用代码举个例子</p>
+<pre><code class="language-kotlin">//一般自定义view的绘画部分对象，都是全局对象
+var path = Path() 
+// Path的起点默认为坐标为(0,0)
+
+//画线一定要设置这个Style
+paint.style = Paint.Style.STROKE
+
+//由起点1一条直线连接到(300, 300)
+path.lineTo(700f, 800f)
+
+//将当前点移动到(500, 400)
+//使用这个方法会获得新的起点
+path.moveTo(500f, 400f)
+
+//由起点2一条直线连接到(200, 700)
+path.lineTo(200f, 700f)
+
+// 闭合路径，即连接当前点和起点
+// 即连接(200,700)与起点2(500, 400)
+// 注:此时起点已经进行变换
+//闭合失败
+path.close();
+
+// 画出路径
+canvas.drawPath(path, paint);
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://KanyeWestForReal.github.io//post-images/1681908757443.png" alt="" loading="lazy"></figure>
+<pre><code class="language-kotlin">var path = Path() 
+// Path的起点默认为坐标为(0,0)
+
+//画线一定要设置这个Style
+paint.style = Paint.Style.STROKE
+
+//由起点1一条直线连接到(300, 300)
+path.lineTo(700f, 800f)
+
+//将当前点移动到(500, 400)
+//使用这个方法不会获得新的起点
+path.setLastPoint(500f, 400f)
+
+//由(500, 400)一条直线连接到(200, 700)
+path.lineTo(200f, 700f)
+
+// 闭合路径，即连接当前点和起点
+// 即连接(200,700)与(500, 400)
+path.close();
+
+// 画出路径
+canvas.drawPath(path, paint);
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://KanyeWestForReal.github.io//post-images/1681908767670.png" alt="" loading="lazy"></figure>
+<p>通过上述大量的<code>drawXXX()方法</code>我们大概可以看出，绘制一个View, 我们需要<em><strong>一个画布(Canvas)</strong></em>，<em><strong>一根笔(Paint)</strong></em>，也要知道<em><strong>在哪起笔(坐标)</strong></em>、以及<em><strong>画多大</strong></em>。</p>
+<p>在<code>drawCircle方法</code>中，圆心坐标和半径，这些都是圆的基本信息，也是它的独有信息。画圆有圆心坐标和半径，画方有吗？画椭圆有吗？这就叫<em><strong>独有信息</strong></em>。</p>
+<p><em>独有信息</em>都是直接作为参数写进 <code>drawXXX()</code> 方法里的（比如 <code>drawCircle(centerX, centerY, radius, paint)</code> 的前三个参数）。</p>
+<p>而除此之外，其他的都是<em><strong>公有信息</strong></em>。比如<em><strong>图形的颜色</strong></em>、<em><strong>空心实心</strong></em>这些，你不管是画圆还是画方都有可能用到的，这些信息则是统一放在 <code>paint</code> 参数里的。</p>
+<p>关于<em><strong>坐标</strong></em>这里插入一下：</p>
+<p>Android中有两个比较常用的坐标系。</p>
+<p>第一个是<em><strong>Android坐标系</strong></em></p>
+<figure data-type="image" tabindex="9"><img src="https://KanyeWestForReal.github.io//post-images/1681908796773.jpg" alt="" loading="lazy"></figure>
+<p>从上到下依次是：</p>
+<ol>
+<li>状态栏（包含通知，系统时间），</li>
+<li>应用的标题栏，</li>
+<li><em><strong>应用的View布局栏</strong></em>，</li>
+<li>底部的导航栏。</li>
+</ol>
+<p>第二个<em><strong>View坐标系</strong></em>，也就是在View布局区域中是这这样：</p>
+<figure data-type="image" tabindex="10"><img src="https://KanyeWestForReal.github.io//post-images/1681908825456.webp" alt="" loading="lazy"></figure>
+<p>基本介绍完Canvas画布，那么就可以看看Paint画笔</p>
+<h4 id="paint">Paint</h4>
+<p><code>Paint</code> 的 API 大致可以分为 3 类：</p>
+<ul>
+<li>颜色</li>
+<li>效果</li>
+<li>drawText() 相关</li>
+</ul>
+<h5 id="颜色">颜色</h5>
+<p>首先我们需要知道，在Canvas上绘制的内容，可以从三个角度来改变绘制的颜色</p>
+<figure data-type="image" tabindex="11"><img src="https://KanyeWestForReal.github.io//post-images/1681908865424.jpeg" alt="" loading="lazy"></figure>
+<h6 id="基础颜色">基础颜色</h6>
+<p>在调用方法确定颜色：颜色直接指定，或是由Paint决定</p>
+<p>除了drawColor\ARBG\Bitmap 也就是图形和文字的绘制，它们的颜色就需要使用 <code>paint</code> 参数来额外设置了。</p>
+<p><code>Paint</code> 设置颜色的方法有两种：<em><strong>一种是直接用 <code>Paint.setColor/ARGB()</code> 来设置颜色</strong></em>，<em><strong>另一种是使用 <code>Shader</code> 来指定着色方案。</strong></em></p>
+<p>这里就直接略过<code>Paint.setColor/ARGB()</code> ，讲一讲<code>Shader</code>着色器。</p>
+<p><em><strong>第一种是LinearGradient 线性渐变</strong></em>：</p>
+<p><code>LinearGradient(float x0, float y0, float x1, float y1, int color0, int color1, Shader.TileMode tile)</code></p>
+<p>从它的构造方法看出，需要设置两个点和两种颜色，以这两个点作为端点，使用两种颜色的渐变来绘制颜色。</p>
+<blockquote>
+<p>参数：<br>
+<code>x0</code> <code>y0</code> <code>x1</code> <code>y1</code>：渐变的两个端点的位置<br>
+<code>color0</code> <code>color1</code> 是端点的颜色<br>
+<code>tile</code>：端点范围之外的着色规则，类型是 <code>TileMode</code>。<code>TileMode</code> 一共有 3 个值可选： <code>CLAMP</code>, <code>MIRROR</code> 和 <code>REPEAT</code>。</p>
+<p>CLAMP:如果着色器超出原始边界，超出的部分延展着色器的边缘颜色</p>
+<p>REPEAT ：如果着色器超出原始边界，复制着色器的图片，包含横向或者竖向</p>
+<p>MIRROR：镜像着色器的内容，倒影形式</p>
+<p>DECAL：渲染着色器原本边界的图像像素，如果超出，绘制黑色透明（可以理解为超出着色器就剪裁）</p>
+<p><strong>其他形状以及文字都可以这样设置颜色</strong></p>
+<p><em><strong>注意：在设置了 <code>Shader</code> 的情况下， <code>Paint.setColor/ARGB()</code> 所设置的颜色就不再起作用。</strong></em></p>
+</blockquote>
+<pre><code class="language-kotlin">   			var lg1 = 
+   					LinearGradient(50f, 200f, 150f, 200f, Color.YELLOW, Color.BLUE, Shader.TileMode.CLAMP)
+paint.shader = lg1
+canvas?.drawCircle(200f, 400f, 100f, paint)
+
+       val lg2 =
+           LinearGradient(400f, 650f, 500f, 650f, Color.YELLOW, Color.BLUE, Shader.TileMode.REPEAT)
+       paint.shader = lg2
+       canvas?.drawRect(200f, 500f, 600f, 800f, paint)
+
+       val lg3 =
+           LinearGradient(200f, 900f, 300f, 900f, Color.YELLOW, Color.BLUE, Shader.TileMode.DECAL)
+       paint.shader = lg3
+       canvas?.drawRect(200f, 900f, 600f, 1200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="12"><img src="https://KanyeWestForReal.github.io//post-images/1681908892662.png" alt="" loading="lazy"></figure>
+<p><em><strong>第二种，RadialGradient 辐射渐变</strong></em></p>
+<p><code>RadialGradient(float centerX, float centerY, float radius, int centerColor, int edgeColor, TileMode tileMode)</code>。</p>
+<blockquote>
+<p>参数：<br>
+<code>centerX</code> <code>centerY</code>：辐射中心的坐标<br>
+<code>radius</code>：辐射半径<br>
+<code>centerColor</code>：辐射中心的颜色<br>
+<code>edgeColor</code>：辐射边缘的颜色<br>
+<code>tileMode</code>：辐射范围之外的着色模式。</p>
+</blockquote>
+<pre><code class="language-kotlin">var shader = RadialGradient(300f, 300f, 200f, Color.parseColor(&quot;#E91E63&quot;),
+  Color.parseColor(&quot;#2196F3&quot;), Shader.TileMode.CLAMP)
+paint.setShader(shader)
+
+...
+
+canvas.drawCircle(300f, 300f, 200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="13"><img src="https://KanyeWestForReal.github.io//post-images/1681908906690.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>第三种，SweepGradient 扫描渐变</strong></em></p>
+<p><code>SweepGradient(float cx, float cy, int color0, int color1)</code></p>
+<blockquote>
+<p>参数：<br>
+<code>cx</code> <code>cy</code> ：扫描的中心<br>
+<code>color0</code>：扫描的起始颜色<br>
+<code>color1</code>：扫描的终止颜色</p>
+</blockquote>
+<pre><code class="language-kotlin">var shader = SweepGradient(300f, 300f, Color.parseColor(&quot;#E91E63&quot;),
+       Color.parseColor(&quot;#2196F3&quot;))
+paint.shader = shader
+
+...
+
+canvas.drawCircle(300f, 300f, 200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="14"><img src="https://KanyeWestForReal.github.io//post-images/1681908917017.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>第四种, BitmapShader</strong></em><br>
+<code>BitmapShader(Bitmap bitmap, Shader.TileMode tileX, Shader.TileMode tileY)</code></p>
+<blockquote>
+<p>参数：<br>
+<code>bitmap</code>：用来做模板的 <code>Bitmap</code> 对象<br>
+<code>tileX</code>：横向的 <code>TileMode</code><br>
+<code>tileY</code>：纵向的 <code>TileMode</code>。</p>
+</blockquote>
+<pre><code class="language-kotlin">var bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.batman)
+var shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+paint.shader = shader
+
+...
+
+canvas.drawCircle(300f, 300f, 200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="15"><img src="https://KanyeWestForReal.github.io//post-images/1681908933496.jpeg" alt="" loading="lazy"></figure>
+<blockquote>
+<p>如果试过drawBitmap，我们会发现这样如果要对Bitmap进行几何裁剪，那么使用BitmapShader是比drawBitmap更加方便。</p>
+</blockquote>
+<p><em><strong>第五种，ComposeShader 混合着色器</strong></em></p>
+<p><code>ComposeShader(Shader shaderA, Shader shaderB, PorterDuff.Mode mode)</code></p>
+<blockquote>
+<p>参数：<br>
+<code>shaderA</code>, <code>shaderB</code>：两个相继使用的 <code>Shader</code>，B绘制上A<br>
+<code>mode</code>: 两个 <code>Shader</code> 的叠加模式，即 <code>shaderA</code> 和 <code>shaderB</code> 应该怎样共同绘制。它的类型是 <code>PorterDuff.Mode</code> ,等下详细展开</p>
+</blockquote>
+<pre><code class="language-kotlin">// 第一个 Shader：头像的 Bitmap
+var bitmap1 = BitmapFactory.decodeResource(getResources(), R.drawable.batman)
+var shader1 = BitmapShader(bitmap1, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+
+// 第二个 Shader：从上到下的线性渐变（由透明到黑色）
+var bitmap2 = BitmapFactory.decodeResource(getResources(), R.drawable.batman_logo)
+var shader2 = BitmapShader(bitmap2, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+
+// ComposeShader：结合两个 Shader
+var shader = ComposeShader(shader1, shader2, PorterDuff.Mode.SRC_OVER)
+paint.shader = shader
+
+...
+
+canvas.drawCircle(300f, 300f, 300f, paint);
+</code></pre>
+<figure data-type="image" tabindex="16"><img src="https://KanyeWestForReal.github.io//post-images/1681908946118.jpeg" alt="" loading="lazy"></figure>
+<blockquote>
+<p>在刚刚的构造方法中，我们发现了一个新的参数类型<code>PorterDuff.Mode</code> ，是用来<em><strong>指定两个图像共同绘制时的颜色策略</strong></em>的，就是说把<strong>源图像绘制到目标图像处时应该怎样确定二者结合后的颜色</strong>。</p>
+<p><code>PorterDuff.Mode</code> 一共有 17 个，可以分为两类：</p>
+<ol>
+<li>Alpha 合成 (Alpha Compositing)：关于 Alpha 通道（也就是「透明度」）的计算的</li>
+</ol>
+<figure data-type="image" tabindex="17"><img src="https://KanyeWestForReal.github.io//post-images/1681908970681.jpeg" alt="" loading="lazy"></figure>
+<ol>
+<li>混合 (Blending)：是 Photoshop 等制图软件里都有的那些混合模式，一般是配合实现设计师各种逆天UI使用</li>
+</ol>
+<figure data-type="image" tabindex="18"><img src="https://KanyeWestForReal.github.io//post-images/1681908981262.jpeg" alt="" loading="lazy"></figure>
+</blockquote>
+<h6 id="colorfilter-xfermode">ColorFilter、Xfermode</h6>
+<p>这两个也是使用的非常少的了，如果需要对相片滤镜之类的研究的话，可以进行了解。</p>
+<p><code>ColorFilter</code>主要是为绘制设置颜色过滤，为绘制的内容设置一个统一的过滤策略。</p>
+<p><code>Xfermode</code>是以绘制的内容作为源图像，以 View 中已有的作为目标图像，选取一个 <code>PorterDuff.Mode</code> 作为结果的颜色处理方案。</p>
+<h5 id="效果">效果</h5>
+<p>效果类的 API ，指的就是抗锯齿、填充/轮廓、线条宽度等等这些。</p>
+<p><em><strong>setAntiAlias (boolean aa) 抗锯齿</strong></em></p>
+<p>设置抗锯齿，这应该是绘制图形一般都会启用</p>
+<figure data-type="image" tabindex="19"><img src="https://KanyeWestForReal.github.io//post-images/1681908995849.png" alt="" loading="lazy"></figure>
+<p>在Android S以上自动开启</p>
+<p><em><strong>setStrokeWidth(float width)</strong></em> <em><strong>线条宽度</strong></em></p>
+<p>设置线条宽度。单位为像素，默认值是 0。</p>
+<blockquote>
+<p>线条宽度 0 和 1 的区别</p>
+<p>默认情况下，线条宽度为 0，但你会发现，这个时候它依然能够画出线，<strong>效果和设置宽度为 1 像素是一样的</strong>。</p>
+<p>实际上这和Canvas的几何变换有关，<em>可以为</em> <code>Canvas</code> <em>设置</em> <code>Matrix</code> 来实现几何变换（如放大、缩小、平移、旋转），在几何变换之后* <code>Canvas</code> <em>绘制的内容就会发生相应变化，包括线条也会加粗，例如 2 像素宽度的线条在</em> <code>Canvas</code> *放大 2 倍后会被以 4 像素宽度来绘制。而当线条宽度被设置为 0 时，它的宽度就被固定为 1 像素。</p>
+<p>线条宽度为 0 时这叫做<em><strong>发际线模式</strong></em>*「hairline mode」。*🐶</p>
+</blockquote>
+<p><em><strong>setStyle(Paint.Style style)</strong></em></p>
+<p>用来设置图形是线条风格还是填充风格的</p>
+<p><em><strong>如果绘制的不是闭合图案，也就是线条之类的，务必启用Paint.Style.STROKE，否则会显示不出。</strong></em></p>
+<pre><code class="language-kotlin">paint.style = Paint.Style.STROKE // STROKE 模式，画线
+</code></pre>
+<figure data-type="image" tabindex="20"><img src="https://KanyeWestForReal.github.io//post-images/1681909011825.jpeg" alt="" loading="lazy"></figure>
+<pre><code class="language-kotlin">paint.styl e= Paint.Style.FILL // FILL 模式，填充
+</code></pre>
+<figure data-type="image" tabindex="21"><img src="https://KanyeWestForReal.github.io//post-images/1681909021344.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>setStrokeJoin(Paint.Join join)</strong></em></p>
+<p>设置拐角的形状，一般是绘画Path使用。有三个值可以选择：<code>MITER</code> 尖角、 <code>BEVEL</code> 平角和 <code>ROUND</code> 圆角。默认为 <code>MITER</code>。</p>
+<figure data-type="image" tabindex="22"><img src="https://KanyeWestForReal.github.io//post-images/1681909034691.jpeg" alt="" loading="lazy"></figure>
+<p>如果使用MITER的话，如果转角过尖锐，可以了解***setStrokeMiter(float miter)***方法，用于设置 <code>MITER</code> 型拐角的延长线的最大值。</p>
+<figure data-type="image" tabindex="23"><img src="https://KanyeWestForReal.github.io//post-images/1681909050946.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>setStrokeCap(Paint.Cap cap)</strong></em></p>
+<p>设置线头的形状，一般是绘画Path使用。线头形状有三种：<code>BUTT</code> 平头、<code>ROUND</code> 圆头、<code>SQUARE</code> 方头。默认为 <code>BUTT</code>。</p>
+<figure data-type="image" tabindex="24"><img src="https://KanyeWestForReal.github.io//post-images/1681909064937.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>setFilterBitmap(boolean filter)</strong></em></p>
+<p>设置是否使用<em><strong>双线性过滤来绘制 <code>Bitmap</code></strong></em> 。</p>
+<p>在Android S以上也是默认开启。</p>
+<p>图像在放大绘制的时候，默认使用的是最近邻插值过滤，这种算法简单，但会出现马赛克现象；而如果开启了双线性过滤，就可以让结果图像显得更加平滑。也是基本都会开启。</p>
+<figure data-type="image" tabindex="25"><img src="https://KanyeWestForReal.github.io//post-images/1681909075395.jpeg" alt="" loading="lazy"></figure>
+<h5 id="drawtext-相关">drawText() 相关</h5>
+<h3 id="布局">布局</h3>
+<p>//TODO</p>
+<h3 id="触摸反馈事件分发">触摸反馈/事件分发</h3>
+<p>//TODO</p>
+<h2 id="参考资料">参考资料：</h2>
+<p>https://rengwuxian.com/ui-1-1/</p>
+<p>https://juejin.cn/post/6996568363581308959</p>
+<p>https://www.jianshu.com/p/705a6cb6bfee</p>
+<p>https://blog.csdn.net/axi295309066/article/details/59798506</p>
+<p>https://zh.wikipedia.org/wiki/%E5%8F%8C%E7%BA%BF%E6%80%A7%E8%BF%87%E6%BB%A4</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[算法小结]]></title>
+        <id>https://KanyeWestForReal.github.io/post/algorithm_summary/</id>
+        <link href="https://KanyeWestForReal.github.io/post/algorithm_summary/">
+        </link>
+        <updated>2023-04-09T13:16:40.000Z</updated>
+        <content type="html"><![CDATA[<p>随手记录一下，跟yxc大佬学过的一些算法。</p>
+<p>虽然学的时间不长，但还是有收获，不过比赛纯纯坐牢了。</p>
+<h2 id="快排">快排</h2>
+<pre><code class="language-java">/*
+ * 笔记：
+ * 快速排序基于分治思想。
+ * 步骤如下：
+ * 1. 确定分界点x,x=(l+r)/2
+ *
+ * 2. 调整区间（重点）：把区间状态修改为：x左边的数小于x,右边的数大于x
+ *
+ * 3. 递归处理左右两端，注意处理l&gt;=r的边界情况，要return
+ *
+ * 如何处理第二步重点？
+ * 1. 设i在l−1位置，j在r+1位置。
+ * 2. 移动指针i，直到碰到一个大于x的数。
+ * 3. 移动指针j，直到碰到一个小于x的数。
+ * 4. swap(ai,aj)
+ * 5. 重复执行2~4步，直到ij相遇。
+ */
+
+//acwing.com/activity/content/problem/content/819/
+class QuickSort {
+    public static void main(String[] args) throws IOException {
+        QuickSort m = new QuickSort();
+        //BR
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        int amount = Integer.parseInt(br.readLine());
+        int[] nums = new int[amount];
+
+        String[] res = br.readLine().split(&quot; &quot;);
+        for (int i = 0; i &lt; amount; i++) {
+            nums[i] = Integer.parseInt(res[i]);
+        }
+
+        m.quickSort(nums, 0, amount - 1);
+
+        for (int i = 0; i &lt; amount; i++) {
+            System.out.print(nums[i] + &quot; &quot;);
+        }
+        br.close();
+    }
+
+    //分治(动态分步？)
+    public void quickSort(int[] nums, int leftIndex, int rightIndex) {
+
+        //判断指针是否越过(/数组长度不够)
+        if (leftIndex &gt;= rightIndex) return;
+
+        //基准值 ！！！：应该取于数组，而不是index，每一次pivot都不同
+
+        int pivot = nums[(leftIndex + rightIndex) &gt;&gt; 1];
+        // &gt;&gt; 1 等于除以2
+
+        //指向真正的边界
+        //因为先do while再swap
+        int i = leftIndex - 1, j = rightIndex + 1;
+
+        //没有相遇/越过,一直向中间移动
+        while (i &lt; j) {
+            do i++; while (nums[i] &lt; pivot);
+
+            do j--; while (nums[j] &gt; pivot);
+
+            //能执行到此，表示以上两个while已经不成立，到了需要交换的情况
+            //判断指针是否相遇/越过。如果是，没必要进行交换，因为元素已经待在需要在的左右边，代表这一轮没有需要交换的位置。
+            if (i &lt; j) {
+                int temp = nums[i];
+                nums[i] = nums[j];
+                nums[j] = temp;
+            }
+        }
+
+        //while循环结束后，q[l, j] &lt;= x,q[j+1, r] &gt;= x
+        //然后分成两段，递归处理，取到边界会导致递归死循环
+        //即n分成0和n，或 n分成n和0,这会造成无限划分
+
+        /*
+         * 向上取整：比自己大的最小整数；
+         * 向下取整：比自己小的最大整数；
+         */
+
+        /*
+         * 用i则不能取到左边界，需要把x取值改成向上取整(l+r+1)
+         * 用j则不能取到右边界，需要把x取值改成向下取整(l+r)
+         */
+
+        // 以x=nums[l+r+1 &gt;&gt; 1], 如果用j为例
+
+        // 由于+1，使得x向上取整,当只存在两个元素时，x始终是右边界，则j不会移动，而i移动。
+        // 到一定程度后，i移动到与基准值[边界]、j重合。
+
+        // 此时再进入下一层循环，传入的leftindex=rightindex=j，分成0和n，造成无限划分
+
+        //所以用右向下取，用左向下取
+
+        quickSort(nums, leftIndex, j);
+        //递归处理左边
+
+
+        quickSort(nums, j + 1, rightIndex);
+        //递归处理右边
+
+    }
+    //模版
+    /*
+    *
+    * public static void quickSort(int[] q,int l,int r){
+        if(l&gt;=r)return;
+        int i = l-1, j = r+1, x = q[l+r&gt;&gt;1]; //重要
+        while(i&lt;j){
+            do i++; while(q[i]&lt;x);
+            do j--; while(q[j]&gt;x);
+            if(i&lt;j){
+                int tmp = q[i];
+                q[i]=q[j];
+                q[j]=tmp;
+            }
+        }
+        quickSort(q,l,j); //重要
+        quickSort(q,j+1,r);
+    }
+    *
+    *
+    * */
+}
+
+</code></pre>
+<h2 id="归并排序">归并排序</h2>
+<pre><code class="language-java">//https://www.acwing.com/activity/content/problem/content/821/
+class MergeSort {
+    static int[] q;
+    static int num;
+
+    static int[] temp;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        num = Integer.parseInt(br.readLine());
+        temp = new int[num];
+        q = Arrays.stream(br.readLine().split(&quot; &quot;)).mapToInt(Integer::parseInt).toArray();
+
+        mergeSort(q,0, num-1 );
+
+        for (int value : temp) {
+            System.out.print(value + &quot; &quot;);
+        }
+
+    }
+
+    static void mergeSort(int[] q, int l, int r) {
+        if (l &gt;= r) {
+            return;
+        }
+        int mid = l + r &gt;&gt; 1;
+        mergeSort(q, l, mid);
+        mergeSort(q,mid + 1, r);
+
+        int k = 0;
+        int i = l, j = mid + 1;
+        while (i &lt;= mid &amp;&amp; j &lt;= r) {
+            if (q[i] &gt;= q[j]){
+                temp[k++] = q[j++];
+            }else {
+                temp[k++] = q[i++];
+            }
+        }
+
+        //左数组没有归并完
+        while(i&lt;=mid){
+            temp[k++] = q[i++];
+        }
+
+        //右数组没有归并完
+        while(j&lt;=r){
+            temp[k++] = q[j++];
+        }
+
+        //需要把每一次归并的结果给记录到数组中，然后再进行下次归并
+        //每次进入一次递归 tmp都会变
+        for (i = l, j = 0; i &lt;= r; i ++, j ++ ) q[i] = temp[j];
+
+    }
+}
+</code></pre>
+<h2 id="dfs深搜">DFS深搜</h2>
+<pre><code class="language-java">/**
+ * 深搜关键:回溯、剪枝、恢复现场
+ * O(h)
+ * 不一定最短路径
+ * DFS组成：递归结束条件的选择+状态标记+递归后的恢复
+ * */
+
+//https://www.acwing.com/activity/content/problem/content/905/
+public class DFSSorting {
+    static int n;
+    static boolean[] used;
+    //表示数字是否被使用
+    static int[] answer;
+
+    //显示排序数组
+
+    public static void main(String args[]) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        //+1才能表示完数
+        //或者直接开辟一个足够大的空间
+        used = new boolean[n+1];
+
+        answer = new int[n];
+        br.close();//!!!
+
+        //从0开排
+        dfs(0);
+    }
+
+    //num表示第几个空位
+    static void dfs(int num){
+        if (num == n){
+            //空位满了
+            for(int i = 0; i &lt; n; i++){
+                System.out.print(answer[i]+&quot; &quot;);
+            }
+            System.out.println();
+        } else {
+            //待放的数i
+            for (int i = 1; i &lt;= n; i++) {
+                //如果数没放
+                if (!used[i]) {
+                    answer[num] = i;
+                    used[i] = true;
+
+                    dfs(num + 1);
+                    //从这里开始回溯
+
+                    //递归调用，后恢复现场
+                    used[i] = false;
+                }
+            }
+        }
+    }
+}
+</code></pre>
+<pre><code class="language-java">//八皇后原题：https://www.acwing.com/activity/content/problem/content/906/
+public class DFSQueens1 {
+    static int n;
+
+    static boolean[] column, dg, udg;
+    //只需要考虑列，num既可以表示第几个皇后，也可以表示第几行
+    static char[][] answer;
+
+    //显示排序数组
+
+    public static void main(String args[]) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        br.close();
+
+        column = new boolean[n];
+
+        dg = new boolean[2 * n - 1];
+        udg = new boolean[2 * n - 1];
+
+        answer = new char[n][n];
+        for (int i = 0; i &lt; n; i++) {
+            for (int j = 0; j &lt; n; j++) {
+                answer[i][j] = '.';
+            }
+        }
+        dfs(0);
+
+    }
+
+    //num表示第几个皇后
+    static void dfs(int num) {
+        if (num == n) {
+            //结束条件
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = 0; j &lt; n; j++) {
+                    System.out.print(answer[i][j]);
+                }
+                System.out.println(&quot;&quot;);
+            }
+            return;
+        }
+        for (int i = 0; i &lt; n; i++) {
+            //num + i 可以理解为行+列
+            //i表示列
+            //n可以理解为边长，反对角线从左下角开始标号
+            //正对角线第2条的坐标为（2，0），（1，1），（0，2）...此时发现把行坐标+列坐标，即可表示第几条对角线
+
+            //剪枝
+            if (!column[i] &amp;&amp; !dg[num + i] &amp;&amp; !udg[n - num + i-1]) {
+                answer[num][i] = 'Q';
+                column[i] = dg[num + i] = udg[n-num + i-1] = true;
+
+                dfs(num + 1);
+
+                column[i] = dg[num + i] = udg[n-num + i-1] = false;
+                answer[num][i] = '.';
+
+            }
+        }
+    }
+}
+</code></pre>
+<pre><code class="language-java">//原始写法
+//枚举：能放皇后吗？
+// 1：能放；
+// 2：不能，则转跳下一个格子，查看是否能放皇后。
+
+//https://www.acwing.com/activity/content/problem/content/906/
+public class DFSQueens2 {
+    static int n;
+
+    static boolean[] rows, columns, dg, udg;
+    //只需要考虑列，num既可以表示第几个皇后，也可以表示第几行
+    static char[][] answer;
+
+    //显示排序数组
+
+    public static void main(String args[]) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        br.close();
+
+        columns = new boolean[n];
+        rows = new boolean[n];
+
+        dg = new boolean[2 * n - 1];
+        udg = new boolean[2 * n - 1];
+
+        answer = new char[n][n];
+        for (int i = 0; i &lt; n; i++) {
+            for (int j = 0; j &lt; n; j++) {
+                answer[i][j] = '.';
+            }
+        }
+
+        dfs(0 , 0, 0);
+
+
+    }
+
+    //num表示第几个皇后
+
+    //row行数
+    //column列数
+    static void dfs(int x, int y, int num) {
+        //越过最后一列，直接换列
+        //偷懒，不写换行的代码
+        if (y == n) {
+            y = 0;
+            x++;
+        }
+        if (x == n) {
+            if (num == n) {
+                //原始逻辑
+                //到最后一行也不能判断皇后是否放完
+                //还有列没有试完
+                for (int i = 0; i &lt; n; i++) {
+                    for (int j = 0; j &lt; n; j++) {
+                        System.out.print(answer[i][j]);
+                    }
+                    System.out.println(&quot;&quot;);
+                }
+            }
+            return;
+        }
+
+        dfs(x, y + 1, num);
+        //可以理解为创建一个状态空间（树分支？）
+
+        //放皇后
+        if (!rows[x] &amp;&amp; !columns[y] &amp;&amp; !dg[x + y] &amp;&amp; !udg[n - x + y -1]) {
+            answer[x][y] = 'Q';
+            columns[x] = dg[x + y] = udg[n - x + y - 1] = true;
+
+            dfs(x, y + 1,  num + 1);
+
+            columns[x] = dg[x + y] = udg[n - x + y - 1] = false;
+
+            answer[x][y] = '.';
+        }
+
+        //不放皇后
+        }
+}
+</code></pre>
+<h2 id="bfs宽搜">BFS宽搜</h2>
+<p>//TODO：由于笔记文件在另一台电脑，所以待补充</p>
+<pre><code class="language-java">//https://www.acwing.com/activity/content/problem/content/908/
+
+public class BFSPuzzle2 {
+    static int[] dx = new int[]{0, -1, 0, 1};
+    static int[] dy = new int[]{1, 0, -1, 0};
+
+    static String end = &quot;12345678x&quot;;
+
+
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String start = br.readLine().replace(&quot; &quot;, &quot;&quot;);
+        System.out.println(bfs(start));
+    }
+
+    static void swap(char[] chars,int xIndex,int targetIndex){
+        char temp = chars[xIndex];
+        chars[xIndex] = chars[targetIndex];
+        chars[targetIndex] = temp;
+    }
+
+    static Integer bfs(String s){
+        Queue&lt;String&gt; q = new LinkedList&lt;&gt;();
+        HashMap&lt;String, Integer&gt; dist = new HashMap&lt;&gt;();
+
+        //初始状态入队
+        q.offer(s);
+        //存初始状态，以及距离
+        dist.put(s, 0);
+
+        //如果队列不空
+        while(!q.isEmpty()){
+
+            String p = q.poll();
+
+            //超耐磨，少些点bug
+            int xIndex = p.indexOf(&quot;x&quot;);
+
+            //一维转二维坐标
+            int x = xIndex/3, y = xIndex % 3;
+
+
+            if (p.equals(end)) return dist.get(p);
+
+            //上下左右走
+            for (int i = 0; i &lt; 4; i++) {
+                int a = x+dx[i],
+                b = y+dy[i];
+
+                //没有越界
+                //0,1,2 千万记得!!!!!!!!!!!!
+                if (a&gt;=0 &amp;&amp; a&lt; 3 &amp;&amp; b&gt;= 0 &amp;&amp; b&lt; 3){
+                    //修改状态
+                    char[] chars = p.toCharArray();
+
+                    //新二维坐标转一维坐标
+                    //比如xIndex = 5;
+                    //坐标从(0,0)开始
+                    //则x = 1,y = 2;
+                    //i=1时，
+                    //new x = 0, new y = 2;
+                    //则new xIndex = 2
+
+                    //x=3, y=3 无法到if体内
+                    swap(chars,xIndex, a*3+b);
+                    String newS = String.valueOf(chars);
+
+                    if (dist.get(newS) == null){
+                        q.offer(newS);
+
+                        dist.put(newS, dist.get(p)+1);
+                    }
+
+                }
+            }
+        }
+        return -1;
+    }
+
+}
+</code></pre>
+<h2 id="二分">二分</h2>
+<h3 id="整数二分">整数二分</h3>
+<pre><code class="language-java">//整数二分法模板
+//二分的本质不是单调性, 单调性的题目一定可以二分, 可以二分的题目不一定有单调性
+//
+//二分的本质是边界
+//二分法用于查找, 每次都选择答案所在的区间再次进行查找, 当区间长度为 1时, 就是答案
+
+//一般二分应用于无非下面这四种情况:
+//1：找大于等于数的第一个位置 （满足某个条件的第一个数）
+//        2：找小于等于数的最后一个数 （满足某个条件的最后一个数）
+//        3.查找最大值 （满足该边界的右边界）、
+//        4.查找最小值 (满足该边界的左边界)
+
+/*
+ * 记忆方面：
+ * 来自视频评论区下方的一句话 : 有加必有减
+ *
+ * int mid = l + r + 1 (加)&gt;&gt; 1;
+ * if (check(mid)) l = mid;
+ * else r = mid - 1  (减);
+ *
+ * */
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+
+//https://www.acwing.com/problem/content/description/791/
+public class IntegerBinarySearch {
+
+//选用哪个模版，需要看check函数（判断条件），判断的是右边还是左边是符合的区间
+//有时候两个模版都会使用
+
+//查找左边界 SearchLeft 简写SL
+/*
+    int SL(int l, int r)
+    {
+        while (l &lt; r)
+        {
+            int mid = l + r &gt;&gt; 1;
+            if (check(mid)) r = mid; //r=mid，就不用补+1
+            else l = mid + 1;
+        }
+        return l;
+    }
+
+ */
+    //查找右边界 SearchRight 简写SR
+/*
+    int SR(int l, int r)
+    {
+        while (l &lt; r)
+        {
+            int mid = l + r + 1 &gt;&gt; 1; //需要+1 防止死循环
+            if (check(mid)) l = mid; //l=mid，需要补+1
+            else r = mid - 1;
+        }
+        return r;
+    }
+
+ */
+    static int nums;
+    static int times;
+    static int[] q;
+    static int[] search;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String[] s1 = br.readLine().split(&quot; &quot;);
+        nums = Integer.parseInt(s1[0]);
+        times = Integer.parseInt(s1[1]);
+        search = new int[times];
+        q = Arrays.stream(br.readLine().split(&quot; &quot;)).mapToInt(Integer::parseInt).toArray();
+
+        for (int i = 0; i &lt; times; i++) {
+            search[i] = Integer.parseInt(br.readLine());
+        }
+
+        br.close();
+
+        binary_search();
+    }
+
+    static void binary_search() {
+        int count = 0;
+
+        //对于可能含有重复数字的数组，使用一种二分模版去寻找，只会找到第一个/最后一个符合check的值
+        //所以需要使用两个模版
+        //对于寻找最大值、最小值，一般使用一个模版
+        while(count &lt; times) {
+            int l = 0;
+            int r = nums - 1;
+            //查找第一个大于等于目标的值
+            while (l &lt; r) {
+                //每一次都得计算新的mid ！！！！！！！！
+                int mid = l + r &gt;&gt; 1;
+                if (q[mid] &gt;= search[count]){
+                    r = mid;
+                }else {
+                    l = mid + 1;
+                }
+            }
+            //到这里已经二分到最后一个数留下
+
+            //如果这个数不满足需要查找的数
+            //直接返回-1
+            if (q[l] != search[count]) {
+                System.out.print(&quot;-1 -1&quot;);
+            }else {
+                //输出目标的起始位置
+                System.out.print(l+&quot; &quot;);
+
+                //查找最后一个小于等于目标的值
+                l = 0;
+                r = nums - 1;
+
+                while (l &lt; r){
+                    int mid = l + r + 1&gt;&gt; 1;
+                    if (q[mid] &lt;= search[count]){
+                        l = mid;
+                    }else {
+                        r = mid - 1;
+                    }
+                }
+                System.out.println(r);
+            }
+            count++;
+
+
+        }
+    }
+
+}
+</code></pre>
+<h3 id="浮点数二分精度求解">浮点数二分（精度求解）</h3>
+<pre><code class="language-java">//https://www.acwing.com/problem/content/description/792/
+//给定一个数，找到它的三次方根
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+
+public class DoubleBinarySearch {
+    static final double ma = 1e-6;
+    //表示精度，取决于题目对精度的要求, 一般比所求精度高 2
+    //保留四位,一般精确度选择1e-6;六位：1e-8;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        double x = Double.parseDouble(br.readLine());
+        binary_search(x);
+    }
+
+    //直接在范围搜索！！！！
+    //首先只考虑n&gt;0的情况
+    //n&gt;1,n的三次幂大于n
+    //n&lt;1，n的三次幂小于n
+    //因此r的值不能一概而论为Math.abs(n)
+    static void binary_search(double x) {
+        double r = 10000;
+        double l = -10000;
+
+        while(r - l &gt; ma) {
+            //double，选择/2
+            //必须放入循环中，这样才能更新mid
+            double mid = (l + r) / 2;
+            if (mid*mid*mid &gt;= x){
+                r = mid;
+            }else {
+                //不需要-1/+1，因为当ma足够小时，可以忽略误差，l+r/2可以逼近答案
+                l = mid;
+            }
+        }
+        System.out.printf(&quot;%.6f&quot;, l);
+
+
+
+    }
+
+}
+</code></pre>
+<h2 id="动态规划dp">动态规划DP</h2>
+<p>//DP实际上是BFS的子问题</p>
+<pre><code class="language-java">//动态规划是不断决策求最优解的过程
+/*
+闫式dp法：
+动态规划有两个要点：状态与状态转移
+那么阶段自然也应该有两个：状态表示和状态计算
+
+具体可以观看：https://www.cnblogs.com/IzayoiMiku/p/13635809.html
+ */
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+
+//https://www.acwing.com/problem/content/2/
+public class YorNDp {
+
+    static int N;
+    static int V;
+
+    static int[] itemV;
+
+    static int[] itemW;
+
+    static int[] F; //状态方程，根据需要 属性表示价值，f则表示最大价值
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String[] s = br.readLine().split(&quot; &quot;);
+        N = Integer.parseInt(s[0]);
+        V = Integer.parseInt(s[1]);
+
+        //第一个物品价值为0
+        itemV = new int[N + 1];
+        itemW = new int[N + 1];
+        //N+1 V+1 !!!!!! 不全是N+1！！！！！
+        F = new int[V + 1];
+
+        //第一个物品开始
+        for (int i = 1; i &lt;= N; i++) {
+            String[] temp = br.readLine().split(&quot; &quot;);
+            itemV[i] = Integer.parseInt(temp[0]);
+            itemW[i] = Integer.parseInt(temp[1]);
+        }
+
+        for (int i = 1; i &lt;= N; i++) {
+            //
+            for (int j = V; j &gt;= itemV[i]; j--) {
+                F[j] = Math.max(F[j], F[j - itemV[i]] + itemW[i]);
+
+            }
+        }
+    }
+}
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Retrofit的简单介绍]]></title>
+        <id>https://KanyeWestForReal.github.io/post/thinking_in_retrofit/</id>
+        <link href="https://KanyeWestForReal.github.io/post/thinking_in_retrofit/">
+        </link>
+        <updated>2023-03-12T08:10:35.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="retrofit的简单介绍"><strong>Retrofit的简单介绍</strong></h2>
+<p><code>Retrofit</code>是一款注解型<code>RESTful</code>的网络框架，使用简单，扩展性强、耦合性低，安全性高。</p>
+<p><code>Retrofit</code>本质上是对<code>OkHttp</code>的封装。<code>OkHttp</code>已经是十分强大的武器，但是在具体使用上还是需要投入不少精力，譬如：无法适配自动线程的切换、调用复杂、网络请求接口配置繁琐、缓存失效等问题。</p>
+<p><code>Retrofit</code>由此孕育而生，为<code>OkHttp</code>如虎添翼。</p>
+<h2 id="retrofit的简单使用"><strong>Retrofit的简单使用</strong></h2>
+<p>由于<code>Retrofit</code>是对<code>OkHttp</code>的二次封装，所以<code>Retrofit</code>的使用与<code>OkHttp</code>大相径庭。</p>
+<p>我们可以把对<code>Retrofit</code> 的实例理解为 <em>炮弹发射器</em>，我们对其一系列的初始的设置，可以理解为打造一款发射器，比如炮管长度，适合的弹药类型...</p>
+<h3 id="tips"><strong>Tips：</strong></h3>
+<p>使用跟网络相关的务必，务必，务必声明权限！否则容易花一堆时间浪费在debug上。</p>
+<pre><code class="language-XML">&lt;uses-permission android:name=&quot;android.permission.INTERNET&quot;/&gt;
+</code></pre>
+<h3 id="初始化retrofit打造发射器"><strong>初始化Retrofit（打造发射器）</strong></h3>
+<pre><code class="language-Java">Retrofit retrofit = new Retrofit.Builder()
+          .baseUrl(&quot;https://netease.coderwdd.top/&quot;)//设置BaseURL以'/'结尾！
+          .addConverterFactory(GsonConverterFactory.create())//数据解析器
+          .build();//创建Retrofit对象
+</code></pre>
+<p>里面比较难理解的其实就是<em>数据转换器</em> <code>(Converter)</code>。</p>
+<p>首先，我们要明白服务器一般返回的数据是<code>JSON（JavaScript Object Notation）</code>的字符串，可以理解为Python里的字典，即<code>K-V</code>的数据类型。不过还是有些服务器会返回<code>XML</code>类型的数据，在这里以普适性为主，选择介绍<code>JSON</code>。</p>
+<p>不论返回的是<code>JSON</code>，还是<code>XML</code>，最原始的办法就是直接对其字符串操控，但这不够<em>优雅</em>！当你要读取里面大量的数据时，会略显狼狈和麻烦。而且这里还会遇到一个坑，就是只能调用一次<code>ResponseBody</code>(OkHttp的类)的<code>body().string()</code>方法，在第一次调用后，OkHttp会释放其缓存资源。</p>
+<p>所以，想要方便地读取JSON里面的数据，可以把JSON转化为实体类。这时候就可以使用上一些开源库作为<code>Converter</code> (Java可以使用<code>Gson</code>，Kotlin可以使用<code>Moshi</code>)，或者是自定义自己的<code>Converter</code>。</p>
+<h3 id="创建数据model"><strong>创建数据Model</strong></h3>
+<p>由于我们需要优雅的读取JSON里面的数据，我们需要创建一个<em>实体类</em><code>(Bean)</code>，里面包含一些getter，setter方法，我们使用<code>Converter</code>把<code>JSON</code>等转化为<em>实体类</em>, 以此达到优雅读取其中数据的效果。</p>
+<pre><code class="language-Java">public class AlbumBean {
+
+   private long id;
+   private String name;
+   private String picUrl;
+
+   public void setId(long id) {
+       this.id = id;
+  }
+   public long getId() {
+       return id;
+  }
+
+   public void setName(String name) {
+       this.name = name;
+  }
+   public String getName() {
+       return name;
+  }
+
+   public void setPicUrl(String picUrl) {
+       this.picUrl = picUrl;
+  }
+   public String getPicUrl() {
+       return picUrl;
+  }
+
+}
+</code></pre>
+<h3 id="定义接口对发射目标的确定"><strong>定义接口（对发射目标的确定）</strong></h3>
+<pre><code class="language-Java">public interface NeteaseApiService {
+
+   @GET(&quot;cloudsearch&quot;)
+   Call&lt;AlbumBean&gt; getSongs(@Query(&quot;keywords&quot;) String name, @Query(&quot;keywords&quot;) intlimit);
+}
+</code></pre>
+<p>由于上次<code>OkHttp</code>的铺垫，那么就默认大家都知道一些网络请求的常识，比如<code>GET</code>、<code>POST</code>请求，<code>URL</code>等。</p>
+<p>上列代码实际上是<strong>将一个<strong><strong>API</strong></strong>转化为一个Java接口</strong>，传入的参数也将是构造URL的一部分。</p>
+<p>在定义接口中，Retrofit的注释就闪亮登场了, 在后面解析源码过程中也会略微介绍Java的注解。</p>
+<p><strong><code>@GET</code></strong> 表示我们的请求方式是GET请求，其后面接的表示接收一个字符串表示接口 <code>PATH</code> ，与 <code>BaseUrl</code> 组成完整的 <code>URL</code>。</p>
+<p><strong><code>@Query</code></strong><code> </code>表示这是查询参数。</p>
+<p>当然还有许多注释，可以去网上寻找更多相关资料。</p>
+<p>我们可以看到<code>getSongs</code>方法返回的是<code>Call&lt;T&gt;</code></p>
+<p>T就是<code>Converter</code>要把<code>JSON</code>转换成的类型，这里涉及到Java的一些特性，泛型擦除和反射等，在后面的<code>Retrofit</code>的源码解析中，将详细展开。</p>
+<pre><code class="language-java">package retrofit2;
+
+import java.io.IOException;
+import okhttp3.Request;
+import okio.Timeout;
+
+public interface Call&lt;T&gt; extends Cloneable {
+  
+  Response&lt;T&gt; execute() throws IOException;
+
+  void enqueue(Callback&lt;T&gt; callback);
+  boolean isExecuted();
+  void cancel();
+  boolean isCanceled();
+  Call&lt;T&gt; clone();
+  Request request();
+  Timeout timeout();
+}
+</code></pre>
+<pre><code class="language-java">final class OkHttpCall&lt;T&gt; implements Call&lt;T&gt; {
+  private final RequestFactory requestFactory;
+  private final Object[] args;
+  private final okhttp3.Call.Factory callFactory;
+  private final Converter&lt;ResponseBody, T&gt; responseConverter;
+
+  OkHttpCall(
+      RequestFactory requestFactory,
+      Object[] args,
+      okhttp3.Call.Factory callFactory,
+      Converter&lt;ResponseBody, T&gt; responseConverter) {
+    this.requestFactory = requestFactory;
+    this.args = args;
+    this.callFactory = callFactory;
+    this.responseConverter = responseConverter;
+  }
+  ...
+}
+</code></pre>
+<p><code>Call</code>由以上图片我们可以看到，它就是Retrofit执行网络请求的一个<strong>顶层接口</strong>, 它的具体实现类是 <strong><code>OkHttpCall</code></strong></p>
+<h3 id="通过retrofit实例创建接口服务对象"><strong>通过Retrofit实例创建接口服务对象</strong></h3>
+<pre><code class="language-Java">NeteaseApiService mApiService = retrofit.create(NeteaseApiService.class);
+</code></pre>
+<p>这里实际上涉及到了<code>Retrofit</code>比较核心的部分，我们需要知道<code>Retrofit</code>本质上是对<code>OkHttp</code>的二次封装，由Retrofit完成对请求的封装，再通过<code>OkHttp</code>完成后续的请求，等待服务器响应后，<code>Retrofit</code>再对响应根据需求进行解析。</p>
+<p>只不过Retrofit使用了大量的<strong>设计模式</strong>，比如建造者模式、工厂模式、代理模式、策略模式等，实现了模块化解耦。</p>
+<p>比如这里通过<strong>动态代理</strong>，使得我们只要在接口中定义方法，而不用实现该方法，以此达到高效、复用、简洁的效果。</p>
+<h3 id="创建-执行网络请求">创建、执行网络请求</h3>
+<p>以异步为例，使用<code>Call</code>执行网络请求</p>
+<p>在这里，Retrofit实际上已经实现了<em>线程切换</em>，即将子线程切换到主线程，从而在主线程对返回的数据结果进行处理，在后面我们将详细解析。</p>
+<pre><code class="language-Java">Call&lt;AlbumBean&gt; call = mApiService.getSongs(song.getName(), 1);
+
+call.enqueue(new Callback&lt;AlbumBean&gt;() {
+            @Override
+            public void onResponse(Call&lt;AlbumBean&gt; call, Response&lt;AlbumBean&gt; response) {
+                // 对返回的数据使用之前设置的数据转换器（Converter）解析返回的数据，
+                // 最终得到一个Response&lt;T&gt;对象
+                然后可以通过Response&lt;T&gt;对象判断状态，以此处理数据
+            }
+ 
+            @Override
+            public void onFailure(Call&lt;List&lt;Repo&gt;&gt; call, Throwable t) {
+                出现错误，进行的操作
+            }
+        });
+</code></pre>
+<p>以上五步，基本上就是对Retrofit的简单使用。</p>
+<p>接下来我们可以深入了解Retrofit，学会其中的设计模式，了解一个合格开源库是如何诞生的，了解鲁棒性高的代码编写风格。</p>
+<h2 id="retrofit的结合使用"><strong>Retrofit的结合使用</strong></h2>
+<p>关于Retrofit配合其他框架，这里推荐几篇文章，以免篇幅过长。</p>
+<p>https://blog.csdn.net/carson_ho/article/details/79125101</p>
+<p>https://blog.yujinyan.me/posts/kotlin-coroutine-retrofit/</p>
+<h2 id="retrofit的源码解析"><strong>Retrofit的源码解析</strong></h2>
+<p>接下来，接下来我们将开始解析Retrofit的源码。</p>
+<h3 id="创建retrofit实例-解析"><strong>创建Retrofit实例</strong> 解析</h3>
+<p>Retrofit实例是<strong>使用建造者模式通过Builder类</strong>进行创建的，</p>
+<p>不过，我们先从Retrofit类看起，</p>
+<h4 id="retrofit类">Retrofit类</h4>
+<pre><code class="language-java">public final class Retrofit {
+  private final Map&lt;Method, ServiceMethod&lt;?&gt;&gt; serviceMethodCache = new ConcurrentHashMap&lt;&gt;();
+
+  final okhttp3.Call.Factory callFactory;
+  final HttpUrl baseUrl;
+  final List&lt;Converter.Factory&gt; converterFactories;
+  final List&lt;CallAdapter.Factory&gt; callAdapterFactories;
+  final @Nullable Executor callbackExecutor;
+  final boolean validateEagerly;
+
+  Retrofit(
+      okhttp3.Call.Factory callFactory,
+      HttpUrl baseUrl,
+      List&lt;Converter.Factory&gt; converterFactories,
+      List&lt;CallAdapter.Factory&gt; callAdapterFactories,
+      @Nullable Executor callbackExecutor,
+      boolean validateEagerly) {
+    this.callFactory = callFactory;
+    this.baseUrl = baseUrl;
+    this.converterFactories = converterFactories; // Copy+unmodifiable at call site.
+    this.callAdapterFactories = callAdapterFactories; // Copy+unmodifiable at call site.
+    this.callbackExecutor = callbackExecutor;
+    this.validateEagerly = validateEagerly;
+  }
+  ...
+}
+</code></pre>
+<p>我们可以看到下面的<em>Retrofit的构造函数</em>，有一长串参数，所以实际应用中如果我们通过构造函数创建一个Retroift的实例，会显得有些复杂冗长。这时<strong>建造者模式</strong>就出场了。我们只需要不断调用方法，一个复杂对象就被创建了。</p>
+<p><strong>由以上Builder类和Retrofit类的构造函数，我们可以的得知，创建成功一个Retrofit对象的标准：需要配置好以下变量</strong></p>
+<ul>
+<li><code>callFactory</code>：网络请求工厂</li>
+<li><code>baseUrl</code>：网络请求的URL地址</li>
+<li><code>converterFactories</code>：数据转换器工厂的集合，负责存储数据转换器工厂</li>
+<li><code>adapterFactories</code>：网络请求适配器工厂的集合，负责存储网络请求适配器工厂</li>
+<li><code>callbackExecutor</code>：回调方法执行器</li>
+<li><code>validateEagerly</code>: 标志位, 是否要急切的验证请求方法，开启则会马上加载Api接口所有方法。一般不用</li>
+</ul>
+<p>简单讲述一下，以上变量的作用。</p>
+<pre><code class="language-Java">private final HttpUrl baseUrl; // 网络请求的url地址 
+private final okhttp3.Call.Factory callFactory; 
+// 网络请求器的工厂
+// 作用：生产网络请求器（Call） 
+// Retrofit是默认使用okhttp 
+private final List&lt;CallAdapter.Factory&gt; adapterFactories; 
+// 网络请求适配器工厂的集合 
+// 作用：放置网络请求适配器工厂 
+// 网络请求适配器工厂作用：生产网络请求适配器（CallAdapter） 
+// 下面会详细说明 
+private final List&lt;Converter.Factory&gt; converterFactories; 
+// 数据转换器工厂的集合 
+// 作用：放置数据转换器工厂 
+// 数据转换器工厂作用：生产数据转换器（converter）
+private final Executor callbackExecutor; // 回调方法执行器 
+private final boolean validateEagerly; 
+// 标志位 
+// 作用：是否提前对业务接口中的注解进行验证转换的标志位
+</code></pre>
+<p>在观察变量中，我们可以看到所谓<code>xxxFactory</code>这类命名的变量，比如<code>callFactory</code>，“xxx工厂”其实是设计模式中<strong>工厂模式</strong>的体现：将“类实例化的操作”与“使用对象的操作”分开，使得使用者不用知道具体参数就可以实例化出所需要的“产品”类。</p>
+<p>通过<code>xxxFactory</code>的命名我们可以知道，最终生产出的就是<code>xxx</code>，例如<code>CallFactory</code>生产出<code>Call</code>，<code>CallAdapterFactory</code>生产的是<code>CallAdapter</code>。</p>
+<p>在之前的定义接口中，我们已经大概知道<code>Call</code>的作用，作为一个顶层接口，其实现类是<code>OkHttpCall</code>，负责实现真正的网络请求。</p>
+<p>那现在我们来解析一下<code>CallAdapter</code>的作用。</p>
+<p><em>Adapter</em>即适配器的意思，我们就可以明白<code>CallAdapter</code>是网络请求执行器（Call）的适配器</p>
+<blockquote>
+<p>在Retrofit中提供了四种<em>CallAdapterFactory</em>：<code> ExecutorCallAdapterFactory</code>（默认）、<code>GuavaCallAdapterFactory</code>、<code>Java8CallAdapterFactory</code>、<code>RxJavaCallAdapterFactory</code></p>
+<p>提供了这几类Adapter，实际上实现了<strong>策略模式</strong>，让Retrofit能够被多个平台/其他框架调用，实现了一定的拓展性。由以上命名我们也可以得知，Retrofit还支持Java8、Guava平台。</p>
+</blockquote>
+<p><strong>作用</strong>：将默认的网络请求执行器（OkHttpCall）转换成适合被不同平台来调用的网络请求执行器形式。比如，对原始Call进行再次封装，如Call到Observable。</p>
+<blockquote>
+<p>如：<code>Retrofit</code>可以利用<code>ExecutorCallbackCall</code>使<code>OkHttpCall</code>在请求中切换线程；</p>
+<p>想要使用<code>Rxjava</code>不切换线程，那就得使用<code>RxJavaCallAdapterFactoryCallAdapter</code>将<code>OkHttpCall</code>转换成<code>Rxjava(Scheduler)</code>。</p>
+</blockquote>
+<p>例如</p>
+<pre><code class="language-Java">// 把response封装成rxjava的Observeble，然后进行流式操作
+Retrofit.Builder.addCallAdapterFactory(new RxJavaCallAdapterFactory().create()); 
+</code></pre>
+<p>其实我们再仔细观察<code>Retrofit</code>类的源码，我们可以看到一个至关重要的变量。</p>
+<pre><code class="language-Java">private final Map&lt;Method, ServiceMethod&gt; serviceMethodCache = new LinkedHashMap&lt;&gt;(); 
+// 网络请求配置对象（对网络请求接口中方法注解进行解析后得到的对象） 
+// 作用：存储网络请求相关的配置，如网络请求的方法、数据转换器、网络请求适配器、网络请求工厂、基地址等
+</code></pre>
+<p>它负责<em>存储</em>解析Api接口后产生的方法，我们可以看到，如果有二次调用，将会直接从该集合中调取，而不是再次解析，实现了复用和节约内存、时间，后面我们还会提到**<code>loadServiceMethod</code>**这一方法。</p>
+<pre><code class="language-java">ServiceMethod&lt;?&gt; loadServiceMethod(Method method) {
+  ServiceMethod&lt;?&gt; result = serviceMethodCache.get(method);
+  if (result != null) return result;
+
+  synchronized (serviceMethodCache) {
+    result = serviceMethodCache.get(method);
+    if (result == null) {
+      result = ServiceMethod.parseAnnotations(this, method);
+      serviceMethodCache.put(method, result);
+    }
+  }
+  return result;
+}
+</code></pre>
+<h4 id="retrofitbuilder类">Retrofit.Builder类</h4>
+<p>现在我们再来认真看看Retrofit.Builder类</p>
+<pre><code class="language-Java">&lt;-- Builder类--&gt; 
+public static final class Builder {
+    public Builder() {
+      this(Platform.get());
+    }
+    // Builder的构造方法（无参） 
+    // 用this调用自己的有参构造方法p
+    ublic Builder(Platform platform)
+    // 并通过调用Platform.get（）传入了Platform对象 
+    // 那么接下来继续看Platform.get()方法
+    
+    //解析完Platform.get()方法后，我们再看Builder的有参构造函数
+    } 
+... 
+}
+class Platform {
+  private static final Platform PLATFORM = findPlatform();
+
+  static Platform get() {
+    return PLATFORM;
+    // 返回静态变量PLATFORM，即findPlatform(),以下方法
+  }
+
+  private static Platform findPlatform() {
+    return &quot;Dalvik&quot;.equals(System.getProperty(&quot;java.vm.name&quot;))
+    ? new Android() 
+    //最后返回一个Platform对象（指定了Android平台）
+    //给Builder的有参构造方法public Builder(Platform platform)
+    : new Platform(true);
+  }
+
+
+  static final class Android extends Platform {
+    Android() {
+      super(Build.VERSION.SDK_INT &gt;= 24);
+    }
+
+    @Override
+    public Executor defaultCallbackExecutor() {
+      // 返回一个默认的回调方法执行器，
+      //在Retrofit实例创建时被调用（Retrofit.Builder()...build()中被调用)
+      //作为默认的回调执行器，完成自动切换线程
+      // 该执行器作用：切换线程（子-&gt;&gt;主线程），并在主线程（UI线程）中执行回调方法
+      return new MainThreadExecutor();
+    }
+
+    static final class MainThreadExecutor implements Executor {
+      private final Handler handler = new Handler(Looper.getMainLooper());
+      // 获取与Android 主线程绑定的Handler 
+        
+        
+      @Override
+      public void execute(Runnable r) {
+        handler.post(r);
+         // 该Handler是上面获取的与Android 主线程绑定的Handler 
+        // 在UI线程进行对网络请求返回数据处理等操作。
+      }
+    }
+  }
+}
+// Builder类的构造函数（有参） 
+public  Builder(Platform platform) { 
+    // 接收Platform对象（Android平台）
+    this.platform = platform; 
+    
+    // 通过传入BuiltInConverters()对象，配置数据转换器工厂（converterFactories） 
+    
+    // converterFactories负责存放数据转换器工厂（Converter.Factory）
+
+    converterFactories.add(new BuiltInConverters()); 
+    // BuiltInConverters是一个内置的数据转换器工厂（继承Converter.Factory类） 
+    
+    // new BuiltInConverters()是作为默认的数据转换器工厂
+}
+</code></pre>
+<p>对Builder类分析完毕，总结：Builder<strong>设置了默认的</strong></p>
+<ul>
+<li>平台类型对象：<code>Android</code></li>
+<li>网络请求适配器工厂：<code>CallAdapterFactory</code></li>
+<li>数据转换器工厂： <code>converterFactory</code></li>
+<li>回调执行器：<code>callbackExecutor</code></li>
+</ul>
+<p>这意味着，如果我们在初始化<code>Retrofit</code>时对一些变量没有设置，那么<code>Builder</code>设置的默认变量就会生效。这一点，我们可以由<code>Builder.build()</code>方法明白。</p>
+<pre><code class="language-Java">public Retrofit build() {
+    
+  &lt;--  配置网络请求执行器（callFactory）--&gt;
+  //这就是为什么说实际上Retrofit是对OkHttp的封装，实际上是通过OkHttp进行请求
+  okhttp3.Call.Factory callFactory = this.callFactory;
+  if (callFactory == null) {
+    callFactory = new OkHttpClient();
+  }
+  
+  
+  &lt;--  配置回调方法执行器（callbackExecutor）--&gt;
+  Executor callbackExecutor = this.callbackExecutor;
+  // 如果没指定，则默认使用Platform检测环境时的默认callbackExecutor
+  // 即Android默认的callbackExecutor
+  if (callbackExecutor == null) {
+    callbackExecutor = platform.defaultCallbackExecutor();
+    //我们可以看到这行代码很眼熟，这里就是返回一个自动切换线程的回调器
+  }
+  
+  //保护性Copy集合
+  &lt;--  配置网络请求适配器工厂（CallAdapterFactory）--&gt;
+  List&lt;CallAdapter.Factory&gt; callAdapterFactories 
+      = new ArrayList&lt;&gt;(this.callAdapterFactories);
+  // 向Retrofit类的该集合中添加了，Builder中创建的CallAdapter.Factory请求适配器工厂（添加在集合器末尾）   
+  
+  callAdapterFactories.addAll(platform.defaultCallAdapterFactories(callbackExecutor));
+  //这时再添加默认适配器工厂（ExecutorCallAdapterFactory）
+  
+  //所以我们说在初始化Retrofit时对一些变量没有设置，那么Builder设置的默认变量就会生效
+    
+
+  List&lt;Converter.Factory&gt; converterFactories =
+      new ArrayList&lt;&gt;(
+          1 + this.converterFactories.size() + platform.defaultConverterFactoriesSize());
+
+  converterFactories.add(new BuiltInConverters());
+  //内置的数据转换器工厂BuiltInConverters(）放在首位
+  
+  converterFactories.addAll(this.converterFactories);
+  //通过addConverterFactory（）添加的数据转换器工厂，放在其次位
+  
+  converterFactories.addAll(platform.defaultConverterFactories());
+  //
+
+  // 最终返回一个Retrofit的对象，并传入上述已经配置好的成员变量，这就是建造者模式
+  return new Retrofit(
+      callFactory,
+      baseUrl,
+      //unmodifiableList（）方法的效果是返回一个不可被修改的集合，这样就增强了程序的鲁棒性
+      unmodifiableList(converterFactories),
+      unmodifiableList(callAdapterFactories),
+      callbackExecutor,
+      validateEagerly);
+}
+</code></pre>
+<p>总结：在最后一步中，通过前面步骤设置的变量，将Retrofit类的所有成员变量都配置完毕，成功创建了Retrofit的实例。</p>
+<h3 id="定义接口-解析"><strong>定义接口</strong> 解析</h3>
+<pre><code class="language-Java">public interface NeteaseApiService {
+
+   @GET(&quot;cloudsearch&quot;)
+   Call&lt;AlbumBean&gt; getSongs(@Query(&quot;keywords&quot;) String name, @Query(&quot;keywords&quot;) intlimit);
+}
+</code></pre>
+<p>这里我们主要解析的是<em><strong>注解</strong></em>，<em><strong>注解</strong></em>是一种可以达到简洁明了的编程方法。通过注解我们可以简化逻辑，更加简单完成封装。</p>
+<p>在Android常用开源库中，我们可以经常看见注解的出现，比如说现在流行的<code>Retrofit</code>，<code>DataBinding</code>等。或者说，曾经大火的<code>ButterKnife</code>和<code>Dagger</code>等中，都能看见它们的身影，不过在Google主打<code>MVVM</code>，推出一系列开源库为<code>MVVM</code>提供标准后，这些大火的开源库已经很少见到使用了。</p>
+<p>话不多说，现在开始进入注解的世界。</p>
+<h4 id="注解">注解</h4>
+<h5 id="元注解">元注解</h5>
+<p><em>元注解</em>，我们可以理解为这是<em>注解的</em><em><em>注解。**用来定义</em>注解的</em><strong>作用目标</strong>，<strong>保留策略</strong>等；</p>
+<pre><code class="language-Java">@Documented //是否被javadoc或类似工具记录在文档中
+
+@Inherited //标识注解是否可以被子类继承，A类标记注解，B类继承A类，那么B类也将继承注解
+
+@Retention(RetentionPolicy.XXX) //表明这个注解是应用什么策略，其可以传入枚举值，只能生效一个保留策略
+
+@Target(ElementType.XXX) //表明这个注解是使用在什么上，其可以传入枚举值，可以生效多个作用目标。
+</code></pre>
+<p>通过源码，我们可以得知Retention和Target能够应用的枚举值</p>
+<pre><code class="language-Java">package java.lang.annotation;
+
+public enum ElementType {
+    TYPE,               // 类、接口（包括注释类型）或枚举声明  
+
+    FIELD,              // 字段声明（包括枚举常量）  
+
+    METHOD,             // 方法声明
+
+    PARAMETER,          // 参数声明
+
+    CONSTRUCTOR,        // 构造方法声明
+
+    LOCAL_VARIABLE,     // 局部变量声明 
+
+    ANNOTATION_TYPE,    // 注释类型声明 
+
+    PACKAGE             // 包声明  
+}
+package java.lang.annotation;
+public enum RetentionPolicy {
+    SOURCE,            //Annotation信息仅存在于编译器处理期间，编译器处理完之后就没有该Annotation信息了
+                       //比如说@OVERRIDE就是使用该保留策略，在编译期间会进行语法检查，编译器处理完后就会消失
+                       //应对着 Java源文件(.java文件)
+                       
+    CLASS,             // 编译器将Annotation存储于类对应的.class文件中。默认行为
+                       // 应对着 .class文件
+
+    RUNTIME            // 编译器将Annotation存储于class文件中，并且可由JVM读入
+                       // 应对着 内存中的字节码
+}
+
+总结一下：
+一般如果需要在运行时去动态获取注解信息，那只能用 RUNTIME 注解；
+如果要在编译时进行一些预处理操作，比如生成一些辅助代码（如 ButterKnife），就用 CLASS注解；
+如果只是做一些检查性的操作，比如 @Override 和 @SuppressWarnings，则可选用 SOURCE 注解。
+</code></pre>
+<ul>
+<li><code>Documented</code>：是否被javadoc或类似工具记录在文档中；</li>
+<li><code>Inherited</code>：标识注解是否可以被子类继承；</li>
+<li><code>Target</code>：作用目标，在<code>ElementType</code>枚举中可以看到取值包括类、方法、属性等；</li>
+<li><code>Retention</code>：保留策略，比如编译阶段是否丢弃，运行时保留；</li>
+</ul>
+<h5 id="定义注解">定义注解</h5>
+<p>我们直接看看<code>@GET</code>注解，</p>
+<pre><code class="language-Java">@Documented 
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface GET {
+  //以下是注解参数的定义
+  String value() default &quot;&quot;;
+  //int type() default 0;
+  //String level() default &quot;info&quot;;
+}
+</code></pre>
+<p>出现了<code>@interface</code>，这是<strong>定义一个注释类型必须出现的关键词</strong>。</p>
+<p>本质上看注解是接口，但是代码并没有显式声明继承关系，可以直接查看字节码文件：</p>
+<pre><code>@interface`被替换成了`extends java.lang.annotation.Annotation
+</code></pre>
+<p>我们在观察主体代码，我添加一些定义参数的例子，我们可以发现定义参数跟定义无参数方法差不多。</p>
+<p>首先明确参数类型</p>
+<p>再明确参数名，加上括号</p>
+<p>我们再可以使用<code>default</code>关键词设定一个默认值，当然也可以省略。</p>
+<h5 id="处理注解">处理注解</h5>
+<p>在之前我们观察了<code>Retrofit</code>的<code>@GET</code>注解，实际上如果注解只是这样，就只是一个花架子。注解一般对代码逻辑不会有任何影响。</p>
+<p>但是，因为注解定义后也是一种<code>class</code>，所有的注解都继承自<code>java.lang.annotation.Annotation</code>，因此，我们可以读取注解，通过使用<strong>反射****API</strong>。</p>
+<p>Java提供的使用反射API读取<code>Annotation</code>的方法：</p>
+<p><code>Class</code>、<code>Field</code>、<code>Method</code>、<code>Constructor</code>可以调用</p>
+<ul>
+<li>***判断某个注解是否存在，***用<code>isAnnotationPresent(AnnotationName.class)</code>下方法，将返回boolean值。</li>
+<li><em><strong>读取所有注解</strong></em>*，*可以使用<code>getAnnotations(AnnotationName.class)</code>方法，将返回一个Annotation[]数组, 如果<code>Annotation</code>不存在，将返回<code>null</code>。</li>
+</ul>
+<p><em><strong>如果想要获得有参的注解的值，可以直接调用获得。</strong></em></p>
+<p>比如说：</p>
+<pre><code class="language-Java">(（GET) annotation).value
+</code></pre>
+<p>对于读取 <em><strong>方法的参数</strong></em> <strong>的注解</strong> 应该使用<code>Method.getParameterAnnotations()</code>，因为 <em><strong>方法的参数</strong></em>  不止一个，将返回一个二维数组<code>Annotation[][]</code>，比如说：</p>
+<pre><code class="language-Java">// 第一个参数（索引为0）的所有Annotation:
+Annotation[] firstArg = annos[0];
+// 第二个参数（索引为1）的所有Annotation:
+Annotation[] secondArg = annos[1];
+</code></pre>
+<p>还有一些没有详细介绍的，我也列举出来：</p>
+<pre><code class="language-Java">/**
+ * 获取指定类型的注解
+ */
+public &lt;A extends Annotation&gt; A getAnnotation(Class&lt;A&gt; annotationType);
+ 
+/**
+ * 获取所有注解，如果有的话
+ */
+public Annotation[] getAnnotations();
+ 
+/**
+ * 获取所有注解，忽略继承的注解
+ */
+public Annotation[] getDeclaredAnnotations();
+ 
+/**
+ * 指定注解是否存在该元素上，如果有则返回true，否则false
+ */
+public boolean isAnnotationPresent(Class&lt;? extends Annotation&gt; annotationType);
+ 
+/**
+ * 获取Method中参数的所有注解
+ */
+public Annotation[][] getParameterAnnotations();
+</code></pre>
+<p>在下一步中我们将再次运用到注释的知识。</p>
+<h3 id="小总结">小总结</h3>
+<p>解析了Retrfit类是如何创建的——通过Builder内部类。</p>
+<p>再进入Builder类内观察，发现配置了大量成员变量——有重要的：</p>
+<ul>
+<li><code>callFactory</code>：网络请求工厂</li>
+<li><code>baseUrl</code>：网络请求的URL地址</li>
+<li><code>converterFactories</code>：数据转换器工厂的集合，负责存储数据转换器工厂</li>
+<li><code>adapterFactories</code>：网络请求适配器工厂的集合，负责存储网络请求适配器工厂</li>
+<li><code>callbackExecutor</code>：回调方法执行器</li>
+<li><code>validateEagerly</code>: 标志位, 是否要急切的验证请求方法，开启则会马上加载Api接口所有方法。</li>
+</ul>
+<p>然后再对定义接口解析，里面使用了注解，同时简略地讲了注解的定义使用，明白了注释是如何一步步被解析为请求的。</p>
+<h3 id="创建接口服务对象-解析"><strong>创建接口服务对象 解析</strong></h3>
+<pre><code class="language-Java">NeteaseApiService mApiService = retrofit.create(NeteaseApiService.class);
+</code></pre>
+<p>到这里，已经涉及到<code>Retrofit</code>的核心设计之一——动态代理。</p>
+<p>我们先解释代理模式，在进行源码解析。</p>
+<p><strong>代理模式</strong>分为<em>动态代理</em>，<em>静态代理</em>，<em>cglib代理</em>。代理模式提供了对<em>目标对象</em>额外的访问方式，即通过代理对象访问目标对象，这样可以在<strong>不修改原目标对象的前提下</strong>，提供<strong>额外的功能操作</strong>，<strong>扩展</strong>目标对象的功能。</p>
+<p>简言之，代理模式就是<strong>设置一个中间代理</strong>来控制访问原目标对象，以达到增强原对象的功能和简化访问方式。</p>
+<h5 id="静态代理">静态代理</h5>
+<p>先介绍<strong>静态代理</strong>，这种代理方式<strong>需要代理对象和目标对象实现一样的接口</strong>。</p>
+<p>优点：可以在不修改目标对象的前提下扩展目标对象的功能。</p>
+<p>缺点：</p>
+<ol>
+<li>冗余。由于代理对象要实现与目标对象一致的接口，会产生过多的代理类。</li>
+<li>不易维护。一旦接口增加方法，目标对象与代理对象都要进行修改。</li>
+</ol>
+<p>举一个栗子，某老师的作用是检查作业。那么某老师的中间代理人是学习委员，学委代收作业给老师检查，然后记下没有完成作业的人。</p>
+<p>我们知道老师都会检查作业，所以新建一个接口抽象。</p>
+<pre><code class="language-Java">public interface ITeacherDao {
+   public void check(作业 book);
+}
+</code></pre>
+<p>目标对象:某老师</p>
+<pre><code class="language-Java">public class TeacherDao implements ITeacherDao{
+
+   @Override
+   public void check(作业 book) {
+        检查作业 
+  }
+}    
+</code></pre>
+<p>中间代理:学委</p>
+<pre><code class="language-Java">public class TeacherDaoProxy implements ITeacherDao{
+
+   private ITeacherDao target;
+   public TeacherDaoProxy(ITeacherDao target) {
+       this.target = target;
+  }
+   
+   @Override
+   public void check(作业 book) {;
+       target.check(作业 book);
+       //扩展了额外功能
+       if 作业完成：
+         不记名
+       else
+         记名
+  }
+}
+</code></pre>
+<p>测试类</p>
+<pre><code class="language-Java">public class StaticTeacherProxy {
+   public void testStaticProxy(){
+       //目标对象
+       ITeacherDao target = new TeacherDao();
+       //代理对象
+       TeacherDaoProxy proxy = new TeacherDaoProxy(target);
+       proxy.check();//调用了学委的check
+  }
+}
+</code></pre>
+<p>首先解释一下，为什么<code>代理类</code>和<code>委托类</code>要实现相同接口？是为了尽可能保证<code>代理类</code>的内部结构和<code>委托类</code>一致，这样对<code>委托类</code>的操作都可以转移到<code>代理类</code>上，<code>代理类</code>可以实现<strong>增强和控制</strong>。比如，我让学委拓展了记名、不记名的功能。</p>
+<h5 id="动态代理">动态代理</h5>
+<p>动态代理利用了<code>JDK API</code>，<em><strong>动态地</strong></em>在内存中构建代理对象，从而实现对目标对象的代理功能。动态代理又被称为<em>JDK代理或接口代理。</em></p>
+<p>静态代理与动态代理的区别主要在：</p>
+<ul>
+<li>静态代理在编译时就已经实现，编译完成后代理类是一个实际的class文件</li>
+<li>动态代理是在运行时动态生成的，即编译完成后没有实际的class文件，<em><strong>而是在运行时动态生成类字节码由</strong></em><em><strong>JVM</strong></em><em><strong>帮助我们生成</strong></em> <em><strong>代理对象的类，同时实现接口</strong></em>***，并加载到JVM中***。由此动态代理也更加<em><strong>灵活</strong></em>、一定程度上<em><strong>减少了重复代码</strong></em>，比如像使用静态代理，我们需要手动完成<code>代理类</code>实现接口，才能调用<code>委托类</code>的方法实现增强控制，当委托类多起来时，<code>代理类</code>就会无限膨胀，维护困难。</li>
+</ul>
+<p><strong>特点：</strong> 动态代理对象不需要实现接口，但是要求目标对象必须实现接口，否则不能使用动态代理。</p>
+<p>首先我们看看JDK API关于动态代理的源码，主要有两个</p>
+<p>在<code>Proxy类</code>下</p>
+<pre><code class="language-Java">//有三个参数
+//为目标对象生成一个代理实例
+public static Object newProxyInstance
+(
+    ClassLoader loader,      //产生代理对象的类加载器，需要将其指定为和目标对象同一个类加载器
+    Class&lt;?&gt;[] interfaces,    //代理对象需要实现的接口，一般与目标对象实现接口相同，这样就能调用这组接口中的方法
+    InvocationHandler h      //事件处理器
+) 
+//返回一个指定接口的代理类实例，该接口可以将方法调用指派到指定的调用处理程序。
+</code></pre>
+<p>这里简单介绍下<em><strong>类加载器</strong></em>，一般来说，Java 类的虚拟机使用 Java 方式如下：Java 源程序（.java 文件）在经过 Java 编译器编译之后就被转换成 Java 字节代码（.class 文件）。类加载器负责读取 Java 字节代码，并转换成 <code>java.lang.Class</code>类的一个实例。每个这样的实例用来表示一个 Java 类。通过此实例的 <code>newInstance()</code>方法就可以创建出该类的一个对象。</p>
+<ul>
+<li><code>InvocationHandler</code>是一个接口，一般<em><strong>使用匿名对象</strong></em>实现<code>invoke()</code>并传入<code>newProxyInstance（）</code>方法</li>
+</ul>
+<pre><code class="language-Java"> //这里的返回的Object，是执行method方法后返回的值
+ public Object invoke(Object proxy, Method method, Object[] args) 
+ // 在代理实例上处理方法调用并返回结果。
+ // 参数说明：
+ // 参数1：代表动态代理对象
+ // 参数2：代表需要执行的方法
+ // 参数3：传递给方法的一系列参数，可以为空
+</code></pre>
+<p>举个栗子，还是老师、学委：</p>
+<pre><code class="language-Java">public interface ITeacherDao {
+   public void check(作业 book);
+}
+</code></pre>
+<p>目标对象:某老师</p>
+<pre><code class="language-Java">public class TeacherDao implements ITeacherDao{
+
+   @Override
+   public void check(作业 book) {
+        检查作业 
+  }
+}  
+</code></pre>
+<p>这时候我们可以不用编写<code>中间代理类</code>，而是编写调用<code>JDK API</code>帮我们动态生成<code>代理类</code>的代码，可以选择使用匿名类，也可以单独写一个<code>ProxyFactory类</code>。</p>
+<p>这里我们选择单独写一个<code>ProxyFactory类</code>，后面再看<code>Retrofit</code>是如何运用动态代理的：</p>
+<pre><code class="language-Java">public class ProxyFactory {
+    //target是需要传入的目标对象
+    public static Object newInstance(Object target){
+        // 为目标对象生成代理对象
+        return 
+            Proxy.newProxyInstance(
+                target.getClass().getClassLoader(), 
+                target.getClass().getInterfaces(),
+                new InvocationHandler() {
+                
+                     //通过 代理对象 调用 目标对象 的方法
+                     //而这个方法又被分发给 InvocationHandler接口 的 invoke来执行
+                     //invoke 方法返回的就是 调用方法返回的
+                     @Override
+                     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                         Object returnValue = method.invoke(target, args);
+                         return returnValue;
+                     }
+            });
+    }
+}
+</code></pre>
+<p>测试类</p>
+<pre><code class="language-Java">public class Test {
+   public static void mian(String[] args){
+       //目标对象
+       ITeacherDao target = new TeacherDao();
+       
+       //代理对象的生成，从这里我们就可以发现与静态代理不同的地方
+       ITeacherDao proxy = （ITeacherDao）ProxyFactory.newInstance(target);
+       
+       proxy.check();//调用了学委的check，实际上是分发给InvocationHandler接口的invoke方法执行
+       //想要对目标对象的方法实现增强与控制，我们就可以在invoke方法中实现
+       //这样目标对象（接口）所有的接口都被统一管理在invoke方法中
+  }
+}
+</code></pre>
+<p>现在我们来看看Retrofit是如何完成动态代理的</p>
+<p>同时我们将进入解析创建网络请求 的部分</p>
+<h3 id="创建网络请求-解析">创建网络请求 解析</h3>
+<pre><code class="language-Java">Call&lt;AlbumBean&gt; call = mApiService.getSongs(song.getName(), 1);
+</code></pre>
+<p>我们已经知道<code>mApiService</code>是代理对象。</p>
+<p>使用<code>getSongs</code>方法会分发给<code>InvocationHandler</code>调用<code>invoke</code>，随后返回一个结果<code>loadServiceMethod(method).invoke(args)</code>，我们先看看<code>loadServiceMethod(method)</code>，再判断它会返回什么。</p>
+<pre><code class="language-Java">public &lt;T&gt; T create(final Class&lt;T&gt; service) {
+    
+  validateServiceInterface(service);
+  //验证我们定义的service是一个接口，且不是泛型接口，并且会判断是否进行方法的提前验证
+  
+  return (T)
+      //看到这里应该很眼熟了，动态代理
+      Proxy.newProxyInstance(
+          service.getClassLoader(),
+          new Class&lt;?&gt;[] {service},//直接声明需要实现service接口
+          new InvocationHandler() {
+            private final Platform platform = Platform.get();
+            
+            @Override
+            public @Nullable Object invoke(Object proxy, Method method, @Nullable Object[] args)
+                throws Throwable {
+              //因为有代理类的生成，默认继承 Object 类
+              //所以如果是 Object.class，默认调用它的方法
+              //安全性保护
+              if (method.getDeclaringClass() == Object.class) {
+                return method.invoke(this, args);
+              }
+              //判断参数，三目运算
+              //安全性保护
+              args = args != null ? args : emptyArgs;
+              
+              //判断如果是默认方法，就执行 platform 的默认方法，否则执行loadServiceMethod方法的invoke方法
+              return platform.isDefaultMethod(method)
+                  ? platform.invokeDefaultMethod(method, service, proxy, args)
+                  : loadServiceMethod(method).invoke(args);
+                  //很明显，最需要关注的就是loadServiceMethod(method).invoke(args);
+            }
+          });
+}
+</code></pre>
+<p>来到<code>loadServiceMethod方法</code>，我们可以看见<em><strong>返回的对象是由</strong></em>***<code>ServiceMethod.parseAnnotations（）</code>***<em><strong>方法创建</strong></em>的，那么我们再深入一下</p>
+<pre><code class="language-Java">private final Map&lt;Method, ServiceMethod&lt;?&gt;&gt; serviceMethodCache = new ConcurrentHashMap&lt;&gt;();
+
+ServiceMethod&lt;?&gt; loadServiceMethod(Method method) {
+  //从 ConcurrentHashMap 中取一个 ServiceMethod 如果存在直接返回，即单例模式
+  ServiceMethod&lt;?&gt; result = serviceMethodCache.get(method);
+  if (result != null) return result;
+  
+  //锁
+  synchronized (serviceMethodCache) {
+    //通过 ServiceMethod.parseAnnotations(this, method);方法创建一个 ServiceMethod 对象
+    result = serviceMethodCache.get(method);
+    if (result == null) {
+      //我们又一次见到了注释（Annotation）
+      //ServiceMethod.parseAnnotations（）方法创建了一个对象
+      result = ServiceMethod.parseAnnotations(this, method);
+      
+      //以method为键
+      //用 Map 把创建的 ServiceMethod 对象缓存起来，因为我们的请求方法可能会调用多次，缓存提升性能。
+      //这就是我们在之前见到的在Retrofit类内的变量
+      serviceMethodCache.put(method, result);
+    }
+  }
+  return result;
+}
+</code></pre>
+<p>我们看看我们的老熟人——注释（Annotation）, 在<code>ServiceMethod类</code>的中出现了它的身影，</p>
+<pre><code class="language-Java">static &lt;T&gt; ServiceMethod&lt;T&gt; parseAnnotations(Retrofit retrofit, Method method) {
+  //通过 RequestFactory 解析注解，然后返回 RequestFactory 对象
+  RequestFactory requestFactory = RequestFactory.parseAnnotations(retrofit, method);
+  ...
+  //把 RequestFactory 对象传给 HttpServiceMethod，
+  //同时也返回一个HttpServiceMethod.parseAnnotations()创建的对象
+  return HttpServiceMethod.parseAnnotations(retrofit, method, requestFactory);
+}
+</code></pre>
+<p>我们先看看<code>RequestFactory.</code><em><code>parseAnnotations（...）</code>**里</em>发生了什么</p>
+<pre><code class="language-Java">//RequestFactory.java
+final class RequestFactory {
+  static RequestFactory parseAnnotations(Retrofit retrofit, Method method) {
+    //看build方法
+    return new Builder(retrofit, method).build();
+  }
+  
+  //build方法
+  RequestFactory build() {
+    //遍历 API 接口上定义的方法注解，然后处理注解
+    for (Annotation annotation : methodAnnotations) {
+      parseMethodAnnotation(annotation);
+      //在Retrofit中就是处理GET、POST等注释
+    }
+
+   ....
+
+    return new RequestFactory(this);
+  }
+}
+</code></pre>
+<p>其实 RequestFactory 这个类还有 <code>parseParameter</code> 和 <code>parseParameterAnnotation</code>这个就是解析<em><strong>方法参数上 的注解</strong></em>，限于篇幅就选择略过。</p>
+<p>这也就是你编写的注释最终变成请求的重要一环，<code>RequestFactory.parseAnnotations</code>，会解析方法上的注解，来存到 RequestFactory 的内部。我们也可以通过RequestFactory的名字，明白它的作用。</p>
+<p>现在我们再返回去研究<code>HttpServiceMethod.parseAnnotations()</code>这个方法，直到明白<code>result</code>到底是什么对象，即<code>loadServiceMethod方法</code>返回了什么对象。</p>
+<pre><code class="language-Java">static &lt;ResponseT, ReturnT&gt; HttpServiceMethod&lt;ResponseT, ReturnT&gt; parseAnnotations(
+    Retrofit retrofit, Method method, RequestFactory requestFactory) {
+     
+    ......
+    // 得到接口方法的返回值信息
+    adapterType = method.getGenericReturnType();
+    ......
+    
+    // 得到数据适配器
+    // 从callAdapterFactories列表里找到一个适合处理这个method的CallAdapter
+    CallAdapter&lt;ResponseT, ReturnT&gt; 
+        callAdapter = createCallAdapter(retrofit, method, adapterType, annotations);
+    ......
+    // 得到数据解析器
+    // 负责把服务器返回的数据（一般由 ResponseBody 封装）转化为 T 类型的对象；
+    // 从converterFactories列表里找到一个适合处理这个method的对象
+    Converter&lt;ResponseBody, ResponseT&gt; 
+        responseConverter = createResponseConverter(retrofit, method, responseType);
+
+     okhttp3.Call.Factory callFactory = retrofit.callFactory;
+     
+     //以上得到的适配器、解析器
+     
+     //不是 Kotlin 的挂起函数
+     if (!isKotlinSuspendFunction) {
+     //把requestFactory传给CallAdapted，同时把给callFactory、callAdapter、responseConverte传给子类
+     //如果不是 Kotlin 的挂起函数，返回是的 CallAdapted 对象
+         return new CallAdapted&lt;&gt;(requestFactory, callFactory, responseConverter, callAdapter);
+     } 
+     
+  ....
+}
+    //现在我们再来看看CallAdapted
+    //CallAdapted 是 HttpServiceMethod 的内部类，也是 HttpServiceMethod 的子类
+    CallAdapted(
+        RequestFactory requestFactory,
+        okhttp3.Call.Factory callFactory,
+        Converter&lt;ResponseBody, ResponseT&gt; responseConverter,
+        CallAdapter&lt;ResponseT, ReturnT&gt; callAdapter) {
+        //这里把 requestFactory 传给 super 父类的构造参数里了,也就是 HttpServiceMethod
+        super(requestFactory, callFactory, responseConverter);
+        this.callAdapter = callAdapter;
+    }
+    
+    //HttpServiceMethod类是ServiceMethod 的子类
+    //也就是说CallAdapted 也是ServiceMethod 的子类
+    HttpServiceMethod(
+        RequestFactory requestFactory,
+        okhttp3.Call.Factory callFactory,
+        Converter&lt;ResponseBody, ResponseT&gt; responseConverter) {
+        // HttpServiceMethod 的 requestFactory 成员变量保存这个 RequestFactory 对象
+        this.requestFactory = requestFactory;
+        this.callFactory = callFactory;
+        this.responseConverter = responseConverter;
+}
+</code></pre>
+<p>到这里，我们总算清楚了，返回是的 CallAdapted 对象，注意CallAdapted 也是ServiceMethod 的子类。</p>
+<p>但是别忘了，在<code>loadServiceMethod(method)</code>后面还接着调用了<code>invoke(args)</code>，也就是说调用了**<code>ServiceMethod 的 invoke 方法</code><strong><strong>，但是</strong></strong><code>ServiceMethod的invoke 方法</code><strong><strong>是一个抽象方法，具体的实现是</strong> **<code>HttpServiceMethod类</code></strong>**。**</p>
+<p>我们再看看<code>HttpServiceMethod类的invoke方法</code></p>
+<pre><code class="language-Java">//ReturnT也是泛型，只不过把名字改得可读性强一些。
+@Override
+final @Nullable ReturnT invoke(Object[] args) {
+  //创建了一个Call对象，是 OkHttpCall，在这里我们还可以看见requestFactory的出现
+  //此后call将进入无限传递
+  Call&lt;ResponseT&gt; call = new OkHttpCall&lt;&gt;(requestFactory, args, callFactory, responseConverter);
+  //在不使用 Kotlin 协程的情况下
+  //其实调用的是子类 CallAdapted 的 adapt，最终会传递给CallAdapter使用
+  return adapt(call, args);
+}
+
+//因为会调用  HttpServiceMethod 的 invoke 方法
+//会把这个 RequestFactory 对象会继续传递给 OkHttpCall 类中
+//所以我们往OkHttpCall的代码看看
+//注意换类了
+//OkHttpCall.java
+OkHttpCall(
+    RequestFactory requestFactory,
+    Object[] args,
+    okhttp3.Call.Factory callFactory,
+    Converter&lt;ResponseBody, T&gt; responseConverter) {
+      //给 OkHttpCall 的requestFactory成员变量赋值
+      this.requestFactory = requestFactory;
+      this.args = args;
+      this.callFactory = callFactory;
+      this.responseConverter = responseConverter;
+}
+</code></pre>
+<p><code>HttpServiceMethod的invoke方法</code>中，把前面解析接口方法获得的所有参数，组合成一个<code>Http请求</code>。然后把执行流程转交给<code>adapt方法</code>，这里传入的<code>call是OkHttpCall类型</code>。在<code>HttpServiceMethod</code>的子类<code>CallAdapted</code>中，执行又交给了请求适配器（CallAdapter）。</p>
+<pre><code class="language-Java">static final class CallAdapted&lt;ResponseT, ReturnT&gt; extends HttpServiceMethod&lt;ResponseT, ReturnT&gt; {
+  private final CallAdapter&lt;ResponseT, ReturnT&gt; callAdapter;
+
+  CallAdapted(
+      RequestFactory requestFactory,
+      okhttp3.Call.Factory callFactory,
+      Converter&lt;ResponseBody, ResponseT&gt; responseConverter,
+      CallAdapter&lt;ResponseT, ReturnT&gt; callAdapter) {
+    //传给父类requestFactory, callFactory, responseConverter
+    super(requestFactory, callFactory, responseConverter);
+    //callAdapter来自于父类
+    this.callAdapter = callAdapter;
+  }
+
+  @Override
+  protected ReturnT adapt(Call&lt;ResponseT&gt; call, Object[] args) {
+  
+    return callAdapter.adapt(call);
+    
+    //call是OkHttpCall类型
+    //在没有设置CallAdapter的情况下，选用的是DefaultCallAdapterFactory生产CallAdapter
+  }
+}
+
+final class DefaultCallAdapterFactory extends Factory {
+
+    @Nullable
+    public CallAdapter&lt;?, ?&gt; get(Type returnType, Annotation[] annotations, Retrofit retrofit) {
+        ...
+            return new CallAdapter&lt;Object, Call&lt;?&gt;&gt;() {
+                public Type responseType() {
+                    return responseType;
+                }
+
+                public Call&lt;Object&gt; adapt(Call&lt;Object&gt; call) {
+                    return (Call)(executor == null ? call : new DefaultCallAdapterFactory.ExecutorCallbackCall(executor, call));
+                    //在这里我们可以看见ExecutorCalbackCall的创建返回
+                    //这里传的call，就是上面我们反复提及的OkHttpCall类型的call
+                }
+            };
+    }
+</code></pre>
+<p>至此，<code>loadServiceMethod(...).invoke(...)</code>方法的执行流程就结束了，最终返回的就是一个<code>OkHttpCall</code>对象（Android 平台返回的是<code>ExecutorCalbackCall</code>，它是<code>OKHttpCall</code>实例的装饰器，扩展了<code>OKHttpCall</code>异步请求回调处理逻辑），同时准备好了数据适配器、以及数据解析器。</p>
+<h3 id="执行网络请求-解析">执行网络请求 解析</h3>
+<pre><code class="language-Java">call.enqueue(new Callback&lt;AlbumBean&gt;() {
+            @Override
+            public void onResponse(Call&lt;AlbumBean&gt; call, Response&lt;AlbumBean&gt; response) {
+                // 对返回的数据使用之前设置的数据转换器（Converter）解析返回的数据，
+                // 最终得到一个Response&lt;T&gt;对象
+                ...
+            }
+ 
+            @Override
+            public void onFailure(Call&lt;List&lt;Repo&gt;&gt; call, Throwable t) {
+                ...
+            }
+        });
+</code></pre>
+<p>由上面的解析得知，返回的<code>call</code>实际上是一个<code>ExecutorCalbackCall</code>对象，但是在它的<code>enqueue</code>方法中实际上，执行的是<code>OkHttpCall.enqueue</code>方法。</p>
+<p>我们直接去<code>OkHttpCall</code>类中观察。</p>
+<pre><code class="language-Java">//OkHttpCall.java
+@Override
+public void enqueue(final Callback&lt;T&gt; callback) {
+  Objects.requireNonNull(callback, &quot;callback == null&quot;);
+
+  //声明一个 okhttp3.Call 对象，用来进行网络请求
+  okhttp3.Call call;
+  Throwable failure;
+
+  synchronized (this) {
+    if (executed) throw new IllegalStateException(&quot;Already executed.&quot;);
+    executed = true;
+
+    call = rawCall;
+    failure = creationFailure;
+    if (call == null &amp;&amp; failure == null) {
+      try {
+        //给 okhttp3.Call 对象进行赋值
+        //等一下我们再详细解析
+        call = rawCall = createRawCall();
+      } catch (Throwable t) {
+        throwIfFatal(t);
+        failure = creationFailure = t;
+      }
+    }
+  }
+
+  if (failure != null) {
+    callback.onFailure(this, failure);
+    return;
+  }
+
+  if (canceled) {
+    call.cancel();
+  }
+
+  //调用 okhttp3.Call 的 enqueue 方法，进行真正的网络请求
+  call.enqueue(
+      new okhttp3.Callback() {
+        @Override
+        public void onResponse(okhttp3.Call call, okhttp3.Response rawResponse) {
+          Response&lt;T&gt; response;
+          try {
+            //解析响应
+            //响应转换器在这里起的作用，对接口的返回结果进行了转换。
+            response = parseResponse(rawResponse);
+          } catch (Throwable e) {
+            throwIfFatal(e);
+            callFailure(e);
+            return;
+          }
+
+          try {
+            //成功的回调
+            callback.onResponse(OkHttpCall.this, response);
+          } catch (Throwable t) {
+            throwIfFatal(t);
+            t.printStackTrace(); 
+          }
+        }
+
+        @Override
+        public void onFailure(okhttp3.Call call, IOException e) {
+          callFailure(e);
+        }
+
+        private void callFailure(Throwable e) {
+          try {
+            //失败的回调
+            callback.onFailure(OkHttpCall.this, e);
+          } catch (Throwable t) {
+            throwIfFatal(t);
+            t.printStackTrace();
+          }
+        }
+      });
+}
+</code></pre>
+<p>我们再来看看，okhttp3.Call 对象到底是怎么创建的，看向 <code>call = rawCall = createRawCall()</code>这一行</p>
+<pre><code class="language-Java">//注意以下都是在OkHtttpCall类中
+private final okhttp3.Call.Factory callFactory;
+
+private okhttp3.Call createRawCall() throws IOException {
+  //出现了callFactory，同时也出现了我们眼熟的requestFactory
+  // 我们在之前就发现了callFactory是由构造方法中赋值的
+  // 即callFactory 的值是从 Retrofit 这个对象拿到的
+  // requestFactory.create(args)方法会返回一个 Request 的对象
+  // 此时的RequestFactory的各个成员变量在解析注解那一步都赋值了
+  // 最终 requestFactory 的值用来构造 okhttp3.Request 的对象
+  okhttp3.Call call = callFactory.newCall(requestFactory.create(args));
+  if (call == null) {
+    throw new NullPointerException(&quot;Call.Factory returned null.&quot;);
+  }
+  return call;
+}
+</code></pre>
+<p>我们往Retrofit类回看，发现，原来 <code>callFactory </code>实际是一个<code>OkHttpClient</code>对象，也就是 OkHttpClient 创建了一个 Call 对象。是不是很眼熟？上周的OkHttp中也差不多是这一套。</p>
+<pre><code class="language-Java">//Retrofit.java
+public static final class Builder {
+    public Retrofit build() {
+      okhttp3.Call.Factory callFactory = this.callFactory;
+      if (callFactory == null) {
+        callFactory = new OkHttpClient();
+      }
+
+}
+</code></pre>
+<p>现在我们来看看是如何解析响应的</p>
+<pre><code class="language-Java">private final Converter&lt;ResponseBody, T&gt; responseConverter;
+
+Response&lt;T&gt; parseResponse(okhttp3.Response rawResponse) throws IOException {
+    ResponseBody rawBody = rawResponse.body();
+
+    ExceptionCatchingResponseBody catchingBody = new ExceptionCatchingResponseBody(rawBody);
+    
+    //这里的responseConverter，实际上，
+    //是由HttpServiceMethod里的createResponseConverter得到
+    T body = responseConverter.convert(catchingBody);//通过 responseConverte 调用convert方法，完成对响应的解析
+    
+    return Response.success(body, rawResponse);
+
+  }
+</code></pre>
+<p>到这里，对<code>Retrofit</code>的大体实现，以及一些细末枝节，已经完成了解析。文章中可能出现一些错误，由可能请尽情指正批评。当然还有很多具体细节没有研究，比如，Retrofit和<code>RxJava</code>、<code>Kotiln</code>的配合实现的原理，由于时间原因就不进行详细介绍。但是阅读完本文后，相信能更好地阅读其他作者的关于对Retrofit原理解析的文章。</p>
+<h3 id="总结">总结</h3>
+<p><code>Retrofit</code>一共使用了六种<em>设计模式</em>，分别为：</p>
+<ul>
+<li><code>建造者模式</code>：<code>Retrofit</code>、<code>Request</code>等复杂对象的创建。</li>
+<li><code>外观模式</code>：<code>Retrofit</code>类提供了整个系统的入口</li>
+<li><code>代理模式</code>：<code>service</code>接口代理类的创建</li>
+<li><code>工厂模式</code> ：<code>xxxFactory</code></li>
+<li><code>策略模式</code>： 到底选择哪种<code>Converter</code>，<code>CallAdapter</code></li>
+<li><code>适配器模式</code> ：<code>adapt方法</code>将<code>OkHttpCall</code> 和 <code>MainThreadExecutor</code>两个实例对象适配为<code>ExecutorCallbackCall</code>，使得在执行过程中就具备了切换到UI线程的功能。</li>
+</ul>
+<p>以上这些设计模式，使Retrofit完成了高度解耦，并且具有一定的拓展性。</p>
+<p>在未来，自己架构或者开发开源库时，使用上述设计模式，我相信一定能写优雅高效的代码。</p>
+<p>通过对源码解析，我们对Retrofit的理解会更加深入，这样以后完成对Retrofit的魔改，或者对Retrofit的封装会更加完善。</p>
+<h3 id="补充">补充：</h3>
+<p>鉴于网上对设计模式的介绍，有些良莠不齐，部分介绍过于繁琐，所以补充一下，一些设计模式在Retrofit哪里有使用。</p>
+<h4 id="策略模式">策略模式</h4>
+<p>模式定义：</p>
+<p>即将<em><strong>不同算法</strong></em>封装到<em><strong>具有共同接口的独立的类</strong></em>中，<em><strong>从而使得它们可以相互替换</strong></em>。策略模式使得算法可以在不影响到客户端的情况下发生变化。</p>
+<p>完成一项任务，往往可以有多种不同的方式，<em><strong>每一种方式称为一个策略</strong></em>，我们可以根据环境或者条件的不同选择不同的策略来完成该项任务。</p>
+<blockquote>
+<p>使用策略模式可以避免使用多重条件(if-else)语句。多重条件语句不易维护，它把采取哪一种算法或采取哪一种行为的逻辑与算法或行为的逻辑混合在一起，统统列在一个多重条件语句里面，比使用继承的办法还要原始和落后。</p>
+</blockquote>
+<p>策略模式包含以下3个角色：</p>
+<ul>
+<li><code>Context（环境类）</code>：负责使用算法策略，其中维持了一个抽象策略类的引用实例。</li>
+<li><code>Strategy（抽象策略类）</code>：所有策略类的父类，为所支持的策略算法声明了抽象方法。=&gt; 既可以是抽象类也可以是接口。</li>
+<li><code>ConcreteStrategy（具体策略类）</code>：实现了在抽象策略类中声明的方法。</li>
+</ul>
+<p>举个栗子，<code>Context（环境类）</code>是<code>Retrofit</code>类，维持了对<code>CallAdapter&lt;R, T&gt;</code>的引用</p>
+<pre><code class="language-Java">//接口定义，作为Strategy（抽象策略类）
+public interface CallAdapter&lt;R, T&gt; {
+    Type responseType();
+    T adapt(Call&lt;R&gt; call);
+}
+//rxjava的适配器 ConcreteStrategy（具体策略类）
+final class RxJavaCallAdapter&lt;R&gt; implements CallAdapter&lt;R, Object&gt; {
+      ...
+}
+//默认的适配器 ConcreteStrategy（具体策略类）
+DefaultCallAdapterFactoryCallAdapter&lt;Object, Call&lt;?&gt;&gt;() {
+    ...
+};
+//安卓适配器 ConcreteStrategy（具体策略类）
+ExecutorCallAdapterFactoryCallAdapter&lt;Object, Call&lt;?&gt;&gt;() {
+    ...
+};
+</code></pre>
+<p>在这里我们需要<em><strong>认识一下工厂模式、策略模式的区别</strong></em></p>
+<ul>
+<li>工厂模式：强调产生了多个不同的 <code>CallAdapter</code> ，作用在创建对象之前。</li>
+<li>策略模式：强调的是这些多个不同的 <code>CallAdapter</code> 的接口方法的具体实现，作用在创建对象之后。</li>
+</ul>
+<blockquote>
+<p>这就好比一个对汽车不甚了解的人去买车，他在那一比划，说要什么什么样的，销售部门根据他的这个“比划”来形成一份订单，这就是工厂模式下的工作方式。</p>
+<p>而策略模式下那个顾客就是个行家，他自己给出了订单的详细信息，销售部门只是转了一下手就交给生产部门去做了。这也就是说，策略模式必须要求客户明白有哪些具体策略，这意味着必须对客户暴露所有的策略类。</p>
+</blockquote>
+<h4 id="适配器模式">适配器模式</h4>
+<p>将一个类的接口转化为客户希望的另一个接口。Adapter模式使得原本由于接口不同而不能一起工作的那些类可以在一起工作。</p>
+<p>//TODO:看有没有时间再补充😋</p>
+<p>建议配合这篇文章观看</p>
+<p>https://zhuanlan.zhihu.com/p/549063015</p>
+<h2 id="参考文章">参考文章：</h2>
+<p>https://www.ruanyifeng.com/blog/2018/10/restful-api-best-practices.html</p>
+<p>https://segmentfault.com/a/1190000011291179</p>
+<p>https://juejin.cn/post/6862368973888061453</p>
+<p>https://www.runoob.com/w3cnote/java-annotation.html</p>
+<p>https://www.jianshu.com/p/be290ccea05a</p>
+<p>https://allenwu.itscoder.com/use-of-proxy</p>
+<p>https://shusheng007.top/2021/09/08/025/</p>
+<p>https://juejin.cn/post/6869584323079569415</p>
+<p>https://www.cnblogs.com/younghao/p/6098329.html</p>
+<p>https://github.com/stven0king/designmode</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[关于RemoteView多次设置图片导致其消失的情况]]></title>
+        <id>https://KanyeWestForReal.github.io/post/remoteview-with-bitmap-anr/</id>
+        <link href="https://KanyeWestForReal.github.io/post/remoteview-with-bitmap-anr/">
+        </link>
+        <updated>2022-12-15T11:58:58.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>If this cover violates your rights, please contact me</p>
+<p>背景：最近为了完善音乐播放器的通知栏，在实现切换歌曲功能中，所遇见的关于使用RemoteVIew问题。</p>
+</blockquote>
+<h2 id="对于该问题也是有两种方法一种治标不治本没有亲自尝试过一种完全解决问题但是比较难以适配">对于该问题也是有两种方法，一种治标不治本(没有亲自尝试过)，一种完全解决问题，但是比较难以适配。</h2>
+<h3 id="第一种使用本地的file来setimageviewuri这样相较于资源的使用应该会减少">第一种：使用本地的File来setImageViewUri,这样相较于资源的使用应该会减少。</h3>
+<h3 id="第二种每次通过setimageviewresource更新remoteview的图片前都再一次加载布局new一个新的remoteview">第二种：每次通过setImageViewResource更新RemoteView的图片前，都再一次加载布局，new一个新的RemoteVIew。</h3>
+<p>对于这种情况，只用等系统自动回收，这样就可以避免标题的情况了，但是在适配上比较麻烦，可能需要挑选比较好的时机new一个。</p>
+<blockquote>
+<p>Stop <em>No AI</em>,<br>
+we need <em>AI</em></p>
+</blockquote>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[关于使用自定义View FloatingButtonMenu，实现随同RecycleView滚动隐藏问题]]></title>
+        <id>https://KanyeWestForReal.github.io/post/custom-view-floatingbuttonmenu-with-recycleview-scrolling/</id>
+        <link href="https://KanyeWestForReal.github.io/post/custom-view-floatingbuttonmenu-with-recycleview-scrolling/">
+        </link>
+        <updated>2022-12-03T05:59:13.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>If this cover violates your rights, please contact me</p>
+<p>背景：最近为了完善音乐播放器的展现歌曲列表功能，选择在展开这方面的尝试。</p>
+</blockquote>
+<p>对于非自定义VIew的FAB，其实可以选用CoordinatorLayout的Behavior进行配合，关于这方面的代码的实现可以选择在网上进行搜索，这里就不进行赘述。</p>
+<h3 id="实现方法选择对recycleview进行下手通过addonscrolllistener中的onscrolled实现">实现方法选择对RecycleView进行下手，通过addOnScrollListener中的onScrolled实现</h3>
+<pre><code>        @Override
+        public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            super.onScrolled(recyclerView, dx, dy);
+            yScrollSum += dy;
+            if(yScrollSum &gt; POINT &amp;&amp; isFabMenuShow){
+                hideFABAnimate(menu);
+                isFabMenuShow = false;
+                yScrollSum = 0;
+            }else if(yScrollSum &lt; -POINT/2 &amp;&amp; !isFabMenuShow){
+                showFABAnimate(menu);
+                isFabMenuShow = true;
+                yScrollSum = 0;
+            }
+
+            if(isFabMenuShow &amp;&amp; dy&gt;0 || (!isFabMenuShow &amp;&amp; dy&lt;0)){
+                yScrollSum += dy;
+            }
+
+        }
+        // FAB移出屏幕动画（隐藏动画）
+	private void hideFABAnimate(FloatingActionMenu fab) {
+    	    fab.animate().translationX(fab.getWidth()).setInterpolator(new AccelerateInterpolator(3)).start();
+	}
+
+		// FAB移入屏幕动画（显示动画）
+	private void showFABAnimate(FloatingActionMenu fab) {
+    	    fab.animate().translationX(0).setInterpolator(new OvershootInterpolator()).start();
+	}
+</code></pre>
+<p>讲解一下思路，就是不断对dy进行求和，判断滑动了多少像素（？dy的单位应该是pixel，但是查询官方文档发现并没有申明单位是否为pixel，反而在<a href="https://stackoverflow.com/questions/49292369/what-are-the-units-given-to-recyclerview-onscrolllistener-dy-dx">SOF的早期回答</a>中发现了）</p>
+<p>当到达你设置的临界点像素（POINT），同时你的FAB是visible/invisible的，就可以启动隐藏/展示动画，然后重置SUM dy。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[关于ViewPager无限循环问题]]></title>
+        <id>https://KanyeWestForReal.github.io/post/the_infinity_of_viewpager_scrolling/</id>
+        <link href="https://KanyeWestForReal.github.io/post/the_infinity_of_viewpager_scrolling/">
+        </link>
+        <updated>2022-12-03T05:58:45.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>If this cover violates your rights, please contact me</p>
+<p>背景：最近为了完善音乐播放器的滑动播放功能，选择在展开这方面的尝试。</p>
+</blockquote>
+<h2 id="对于题目展示的问题根据网上资料总结一共有三种办法">对于题目展示的问题，根据网上资料总结一共有三种办法。</h2>
+<h3 id="第一种通过设置viewpager的adapter的getcount方法返回integermax_value获得无限多的item造成一种伪循环的效果">第一种：通过设置ViewPager的Adapter的getCount方法，返回Integer.MAX_VALUE，获得无限多的Item，造成一种伪循环的效果。</h3>
+<p>但实际在尝试中感觉并不理想，尤其是ViewPager的Item中含有动画时，容易造成ANR，即使选择getCount中乘以40倍的Size返回也容易造成ANR。</p>
+<h3 id="第二种通过对数据首尾互相添加假数据的效果然后通过setcurrentitem实现无限循环的方法-smoothscroll选择false取消动画">第二种：通过对数据首尾互相添加假数据的效果，然后通过setCurrentItem实现无限循环的方法。（smoothScroll选择false，取消动画）</h3>
+<pre><code>    mSongs.addAll(songList);
+    //丑陋地添加首尾数据的代码
+    
+    Song temp1 = mSongs.get(0);
+    Song temp2 = mSongs.get(mSongs.size() - 1);
+
+    mSongs.add(0, temp2);
+    mSongs.add(mSongs.size(), temp1);
+</code></pre>
+<p>这里，我选择在传入数据时，通过代码添加。接下来就是，可以选择在ViewPager的onPageScrollStateChanged使用setCurrentItem方法了，不过还建议在onPageSelected中设置一个boolean，判断是否在滑动以节省资源。</p>
+<pre><code>        @Override
+        public void onPageSelected(int position) {
+        	    //选择取消唱片动画
+        	    //回调提醒Song已经改变
+            mIsChanged = true;
+            if (position &gt; currentItem) {
+                notifyMusicStatusChanged(MusicChangedStatus.NEXT);
+            } else {
+                notifyMusicStatusChanged(MusicChangedStatus.LAST);
+            }
+
+            if(position == 0){
+                currentItem = mSongs.size()-2;
+            }else if(position== mSongs.size()-1){
+                currentItem = 1;
+            }else {
+                currentItem = position;
+            }
+
+        }
+
+        @Override
+        public void onPageScrollStateChanged(int state) {
+
+            if (state == ViewPager.SCROLL_STATE_IDLE) {
+                //动画
+
+                //防止在Scroll时，再次更新动画导致，发生ANR
+                if (mIsChanged) {
+                    mIsChanged = false;
+                    mVpContain.setCurrentItem(currentItem, false);
+                }
+            }
+        }
+    });
+</code></pre>
+<p>如果，除了有滑动实现切换的方法外，比如点击按钮也会切换，记得处理好点击按钮的逻辑。</p>
+<h3 id="第三种其实是第二种的变种选择在viewpager的adapter的finishupdate中完成setcurrentitem方法这种方法应该比第二种更能节省资源同时也不需要多一个量记录viewpager是否在动画中">第三种：其实是第二种的变种，选择在ViewPager的Adapter的finishUpdate中完成setCurrentItem方法，这种方法应该比第二种更能节省资源，同时也不需要多一个量记录ViewPager是否在动画中。</h3>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Start At 12.1.2022]]></title>
+        <id>https://KanyeWestForReal.github.io/post/start-at-1212022/</id>
+        <link href="https://KanyeWestForReal.github.io/post/start-at-1212022/">
+        </link>
+        <updated>2022-12-01T15:31:10.000Z</updated>
+        <content type="html"><![CDATA[<p><strong>所有开发文章，仅仅是为了记录我的开发历程。</strong></p>
+]]></content>
+    </entry>
+</feed>
