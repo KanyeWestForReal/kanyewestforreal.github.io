@@ -1,0 +1,674 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>自定义View入门知识 | Grinofith&#39;s Blog</title>
+<link rel="shortcut icon" href="https://kanyewestforreal.github.io//favicon.ico?v=1739372912966">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://kanyewestforreal.github.io//styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="自定义View入门知识 | Grinofith&#39;s Blog - Atom Feed" href="https://kanyewestforreal.github.io//atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="前言
+
+这篇文章主要目的是记录原生自定义View与Compose的一些笔记，同时为了适应Kotlin，全文尽量选择使用Kotlin作为记录。
+关于原生的自定义View，在Compose出来以后，还有没有必要学习？这是一个比较有争议的问题，我..." />
+    <meta name="keywords" content="Android" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://kanyewestforreal.github.io/">
+  <img class="avatar" src="https://kanyewestforreal.github.io//images/avatar.png?v=1739372912966" alt="">
+  </a>
+  <h1 class="site-title">
+    Grinofith&#39;s Blog
+  </h1>
+  <p class="site-description">
+    The key is seriously reflecting.
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              自定义View入门知识
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-04-19
+              </span>
+              <span>
+                20 min read
+              </span>
+              
+                <a href="https://kanyewestforreal.github.io/tag/AndroidTAG/" class="post-tag">
+                  # Android
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://kanyewestforreal.github.io//post-images/custom_view.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h2 id="前言">前言</h2>
+<figure data-type="image" tabindex="1"><img src="https://kanyewestforreal.github.io//post-images/1681908551948.jpeg" alt="" loading="lazy"></figure>
+<p>这篇文章主要目的是记录原生自定义View与<code>Compose</code>的一些笔记，同时为了适应<code>Kotlin</code>，全文尽量选择使用<code>Kotlin</code>作为记录。</p>
+<p>关于原生的自定义<code>View</code>，在<code>Compose</code>出来以后，还有没有必要学习？这是一个比较有争议的问题，<em><strong>我的评价是，建议都学😋</strong></em>。</p>
+<p>且听我细说：一、即使<code>Compose自定义View</code>相对于<code>原生的自定义View</code>过程，十分不同，但是一部分<code>Compose自定义View</code>也会需要原生的知识，<code>Compose</code> 目前还不支持的绘制功能，比如绘制文字，可以通过 <code>drawIntoCanvas</code> 方法拿到原生 <code>Android</code> 环境的 <code>Canvas</code> 和 <code>Paint</code> 对象，利用原生 <code>Android</code> 环境的 <code>API</code> 方法来实现部分绘制需求。</p>
+<p>二、即使<code>Compose</code>发布了几年，实际上还是有一部分公司的UI是基于<code>原生View</code>的。你写新代码当然可以选择 <code>Compose</code>，但是老代码维护的时候还是要和 <code>View</code> 打交道呀。</p>
+<p>三、由于<code>Compose</code> 是基于 <code>View</code> 系统的，它的原理是通过一个自定义的 <code>View</code>，去对它的 <code>onMeasure()</code>、<code>onLayout()</code>、<code>onDraw()</code>、<code>dispatchTouchEvent()</code>，在遇到一些<code>Compose</code>无法解决的问题时，我们还是需要原始View的知识去解决。</p>
+<blockquote>
+<p>同时由于上次的Retrofit问题，我决定减少篇幅，选择比较重要的点列出，比如感悟和经验，减少解析源码部分。让这篇文章偏向笔记化。</p>
+</blockquote>
+<h2 id="原生自定义view基础知识">原生自定义View基础知识</h2>
+<h3 id="前言-2">前言</h3>
+<h4 id="自定义view的分类">自定义View的分类</h4>
+<ul>
+<li>自定义组合控件 			多个控件组合成为一个新的控件，方便多处复用</li>
+<li>继承系统View控件 		继承自TextView等系统控件，在系统控件的基础功能上进行扩展</li>
+<li>继承View 			  		不复用系统控件逻辑，继承View进行功能定义</li>
+<li>继承系统ViewGroup 	 继承自LinearLayout等系统控件，在系统控件的基础功能上进行扩展</li>
+<li>继承ViewGroup 	        不复用系统控件逻辑，继承ViewGroup进行功能定义</li>
+</ul>
+<p>在<code>原生的 Android View</code> 体系下，我们要实现一个<code>自定义 View</code> 所需要的基本步骤有：</p>
+<ul>
+<li>继承 <code>android.view.View</code>/<code>ViewGroup</code>（<em><strong>或者某些现成的组件</strong></em>），在子类的构造函数中通过 <code>AttributeSet</code> 拿到在 <em><strong>XML 文件</strong></em>中声明的各个属性值</li>
+<li>重写 <code>onMeasure</code> 和 <code>onSizeChanged</code> 两个方法，拿到 <code>View</code> 的宽高信息 （<em><strong>测</strong></em>）</li>
+<li>重写 <code>onLayout</code> 方法，确定<code>子 View</code> 的位置信息（如果是<em><strong>自定义 ViewGroup</strong></em> 的话）（<em><strong>布</strong></em>）</li>
+<li>重写 <code>onDraw</code> 方法，通过 <code>Paint</code>、<code>Path</code> 等在 <code>Canvas</code> 绘制图形，从而实现各种自定义效果 （<em><strong>画</strong></em>）</li>
+<li>重写 <code>onVisibilityChanged</code>、<code>onAttachedToWindow</code>、<code>onDetachedFromWindow</code> 等方法，在适当的时候开启动画或者停止动画，避免资源浪费和内存泄漏（<em><strong>如果有使用到 Animator 的话</strong></em>）</li>
+<li>重写<code>dispatchTouchEvent</code>、<code>onInterceptTouchEvent</code>、onTouchEvent等方法，完成对用户操作的正确回馈。</li>
+</ul>
+<p>在这篇笔记里主要记录一下自定义View的三大基本方法，最终目的就是能达到对原生自定义View的基本了解和使用，实际上<em><strong>真正重要的是Compose的相关学习</strong></em>。</p>
+<p>不过接下来，先从<em><strong>最重要的</strong></em>讲起——<em><strong>画，也就是绘制</strong></em>。</p>
+<blockquote>
+<p>Tips:记得关闭硬件加速</p>
+</blockquote>
+<h3 id="绘制">绘制</h3>
+<h4 id="一切的开始ondraw">一切的开始：onDraw()</h4>
+<p>自定义View的绘制上手非常容易：在初始化方法中提前创建好 <code>Paint</code> 对象，重写 <code>onDraw()</code>，把绘制代码写在 <code>onDraw()</code> 里面，就是自定义绘制最基本的实现。</p>
+<p>Tips：为什么我们不在<code>onDraw方法</code>中初始化对象，或者进行耗时操作？因为<code>onDraw方法</code>会不断的被调用，这时候就会出现一个十分高大的词语——<strong>内存抖动</strong>。</p>
+<figure data-type="image" tabindex="2"><img src="https://kanyewestforreal.github.io//post-images/1681908598819.png" alt="" loading="lazy"></figure>
+<p>我们在 <code>onDraw()</code> 里创建的对象往往是绘制相关的对象，而这些对象又经常会包含通往<code>系统下层的 Native 对象</code>的引用，这就导致在 onDraw() 里创建对象所导致的内存回收的耗时往往会更高，直白地说就是——<em><strong>界面更卡顿</strong></em>。</p>
+<p>回到正题，</p>
+<pre><code class="language-kotlin">class PractiseView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0)
+    : View(context, attrs, defStyleAttr) {
+
+    private val mContext : Context = context
+
+    private var paint : Paint = Paint()
+      
+    override fun onDraw(canvas: Canvas?) {
+      	//唯一需要注意的是别漏写了 super.onDraw()。
+        super.onDraw(canvas)
+        
+        //画个圆
+        canvas?.drawCircle(200f, 200f, 100f, paint)
+      	//drawCircle(float centerX, float centerY, float radius, Paint paint) 画圆
+      	// 前两个参数 centerX centerY 是圆心的坐标，
+        // 第三个参数 radius 是圆的半径，单位都是像素，它们共同构成了这个圆的基本信息
+        // 第四个参数 paint提供基本信息之外的所有风格信息，例如颜色、线条粗细、阴影等。
+      	
+    }
+
+
+}
+</code></pre>
+<p>我们先来分析下，<code>Canvas</code>类里面有大量的<code>drawXXX()</code>方法，如果我们知道<em><strong>Canvas的翻译是画布</strong></em>，那么就很简单理解了。</p>
+<h4 id="canvasdrawxxx常见方法">Canvas.drawXXX常见方法</h4>
+<h5 id="颜色填充">颜色填充</h5>
+<p><code>drawColor(@ColorInt int color)</code></p>
+<p><code>drawRGB(int r, int g, int b)</code></p>
+<p><code>drawARGB(int a, int r, int g, int b)</code></p>
+<blockquote>
+<p>a代表透明度</p>
+<p>给整个画布填充颜色</p>
+<p>如果最后调用，会直接覆盖</p>
+</blockquote>
+<pre><code class="language-kotlin">         paint.color = Color.BLACK
+         canvas?.drawColor(Color.RED)
+         canvas?.drawRect(200f, 100f, 400f,200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://kanyewestforreal.github.io//post-images/1681908650038.png" alt="" loading="lazy"></figure>
+<h5 id="画圆">画圆</h5>
+<p><code>drawCircle(float centerX, float centerY, float radius, Paint paint)</code></p>
+<h5 id="画-bitmap">画 Bitmap</h5>
+<p><code>drawBitmap(Bitmap bitmap, float left, float top, Paint paint)</code></p>
+<blockquote>
+<p>绘制 <code>Bitmap</code> 对象，也就是把这个 <code>Bitmap</code> 中的像素内容贴过来。其中 <code>left</code> 和 <code>top</code> 是要把 <code>bitmap</code> 绘制到的位置坐标。</p>
+</blockquote>
+<h5 id="画矩形">画矩形</h5>
+<p><code>drawRect(float left, float top, float right, float bottom, Paint paint)</code></p>
+<blockquote>
+<p><em><strong><code>left</code>, <code>top</code>, <code>right</code>, <code>bottom</code> 是这个椭圆的左、上、右、下四个边界点的坐标。</strong></em></p>
+<p>left, right 的值是相对于x轴的</p>
+<p>top, bottom 的值是相对于y轴的</p>
+<p>例子：</p>
+</blockquote>
+<p>我们可以发现left的值是等于top的值，却能生成以下正常的椭圆</p>
+<pre><code class="language-kotlin">canvas?.drawCircle(100f, 100f, 50f ,paint)
+canvas?.drawArc(200f, 200f, 800f, 500f, 100f, 100f, true, paint)
+paint.color = Color.BLACK
+paint.alpha = 100
+canvas?.drawOval(200f,200f, 800f, 500f, paint)
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://kanyewestforreal.github.io//post-images/1681908675395.png" alt="" loading="lazy"></figure>
+<h5 id="画点">画点</h5>
+<p><code>drawPoint(float x, float y, Paint paint)</code></p>
+<p><code>drawPoints(float[] pts, Paint paint) 批量画点</code></p>
+<blockquote>
+<p><code>pts</code> 这个数组是点的坐标，每两个成一对</p>
+</blockquote>
+<p><code>drawPoints(float[] pts, int offset, int count, Paint paint)</code></p>
+<blockquote>
+<p>批量画点。</p>
+<p><code>offset</code>代表跳过<code>pts</code>数组中前几个数再开始记坐标）</p>
+<p>可以实现<em><strong>间隔变化的点绘制</strong></em></p>
+</blockquote>
+<h5 id="画椭圆">画椭圆</h5>
+<p><code>drawOval(float left, float top, float right, float bottom, Paint paint)</code></p>
+<h5 id="画线">画线</h5>
+<p><code>drawLine(float startX, float startY, float stopX, float stopY, Paint paint)</code></p>
+<blockquote>
+<p><code>startX</code>, <code>startY</code>, <code>stopX</code>, <code>stopY</code> 分别是线的起点和终点坐标。</p>
+</blockquote>
+<p><code>drawLines(float[] pts, Paint paint)</code></p>
+<p><code>drawLines(float[] pts, int offset, int count, Paint paint)</code></p>
+<blockquote>
+<p>画线（批量）</p>
+<p>可以实现<em><strong>间隔变化的线绘制</strong></em></p>
+</blockquote>
+<h5 id="画圆角矩形">画圆角矩形</h5>
+<p><code>drawRoundRect(float left, float top, float right, float bottom, float rx, float ry, Paint paint)</code></p>
+<blockquote>
+<p><code>left</code>, <code>top</code>, <code>right</code>, <code>bottom</code> 是四条边的坐标，<code>rx</code> 和 <code>ry</code> 是圆角的横向半径和纵向半径。</p>
+</blockquote>
+<h5 id="绘制弧形或扇形">绘制弧形或扇形</h5>
+<p>drawArc(float left, float top, float right, float bottom, float startAngle, float sweepAngle, boolean useCenter, Paint paint)</p>
+<blockquote>
+<p><code>drawArc()</code> 是使用一个椭圆来描述弧形的。</p>
+<p><code>left</code>, <code>top</code>, <code>right</code>, <code>bottom</code> 描述的是这个弧形所在的椭圆；<code>startAngle</code> 是弧形的起始角度（x 轴的正向，即正右的方向，是 0 度的位置；顺时针为正角度，逆时针为负角度），<code>sweepAngle</code> 是弧形划过的角度；<em><strong><code>useCenter</code> 表示是否连接到圆心，如果不连接到圆心，就是弧形，如果连接到圆心，就是扇形。</strong></em></p>
+</blockquote>
+<h5 id="绘制文字">绘制文字</h5>
+<p><code>drawText(String text, float x, float y, Paint paint)</code></p>
+<blockquote>
+<p>参数 <code>text</code> 是用来绘制的字符串，<code>x</code> 和 <code>y</code> 是绘制的起点坐标。</p>
+</blockquote>
+<h5 id="画自定义图形">画自定义图形</h5>
+<p><code>drawPath(Path path, Paint paint)</code></p>
+<blockquote>
+<p><code>drawPath()</code> 可以绘制自定义图形。当你要绘制的图形比较特殊，使用前面的那些方法做不到的时候，就可以使用 <code>drawPath()</code> 来绘制。</p>
+<figure data-type="image" tabindex="5"><img src="https://kanyewestforreal.github.io//post-images/1681908712664.jpeg" alt="" loading="lazy"></figure>
+</blockquote>
+<p><code>drawPath</code>可以说是最重要的方法之一，实际上一些非特定的<code>View</code>，其实是可以通过继承系统控件魔改，或者是组合各种系统控件完成。而那些十分帅气（花里胡哨）的控件，基本上是使用<code>drawPath</code>相关方法绘制的。</p>
+<p>Path 可以描述直线、二次曲线、三次曲线、圆、椭圆、弧形、矩形、圆角矩形。把这些图形结合起来，就可以描述出很多复杂的图形。Path 可以归结为两类方法：</p>
+<ul>
+<li>
+<p>直接描述路径，也可以分为两组：</p>
+<ul>
+<li>
+<p>添加子图形：<code>addXXX()</code>, 此类方法在特定情况下几个 <code>Canvas.drawPath()</code> 等同于 <code>Canvas.drawXXX()</code>。</p>
+</li>
+<li>
+<p>画直线或曲线：<code>xxxTo()</code>: 这一组和第一组 <code>addXxx()</code> 方法的区别在于，第一组是添加的完整封闭图形（除了 <code>addPath()</code> ），而这一组添加的只是一条线。</p>
+</li>
+</ul>
+</li>
+<li>
+<p>辅助设置或计算： <code>Path.setFillType(Path.FillType ft)</code> 设置填充方式，由于比较少使用不进行介绍。</p>
+<p>可以参考https://juejin.cn/post/7067012239223422983这篇文章。</p>
+</li>
+</ul>
+<p>这里面主要介绍<em><strong>Path的画直、曲线的方法</strong></em>：</p>
+<p><strong>lineTo(float x, float y) / rLineTo(float x, float y) 画直线</strong></p>
+<p>从<strong>当前位置</strong>向目标位置画一条直线， <code>x</code> 和 <code>y</code> 是目标位置的坐标。这两个方法的区别是，<code>lineTo(x, y)</code> 的参数是<strong>绝对坐标</strong>，而 <code>rLineTo(x, y)</code> 的参数是相对当前位置的<strong>相对坐标</strong> 。</p>
+<blockquote>
+<p><strong>当前位置</strong>：所谓当前位置，即最后一次调用画 <code>Path</code> 的方法的终点位置。初始值为原点 (0, 0)。</p>
+</blockquote>
+<pre><code class="language-kotlin">paint.style = Style.STROKE
+path.lineTo(100, 100) // 由当前位置 (0, 0) 向 (100, 100) 画一条直线
+path.rLineTo(100, 0) // 由当前位置 (100, 100) 向正右方 100 像素的位置画一条直线
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://kanyewestforreal.github.io//post-images/1681908732244.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong><code>quadTo(float x1, float y1, float x2, float y2) / rQuadTo(float dx1, float dy1, float dx2, float dy2) 绘制二次贝塞尔曲线</code></strong></em></p>
+<p>这条二次贝塞尔曲线的起点就是当前位置，而参数中的 <code>x1</code>, <code>y1</code> 和 <code>x2</code>, <code>y2</code> 则分别是控制点和终点的坐标。和 <code>rLineTo(x, y)</code> 同理，<code>rQuadTo(dx1, dy1, dx2, dy2)</code> 的参数也是<em><strong>相对坐标</strong></em></p>
+<p><em><strong><code>cubicTo(float x1, float y1, float x2, float y2, float x3, float y3) /rCubicTo(float x1, float y1, float x2, float y2, float x3, float y3)</code></strong></em> <em><strong>绘制三次贝塞尔曲线</strong></em></p>
+<p>这条三次贝塞尔曲线的起点就是当前位置，而参数中的 <code>x1</code>, <code>y1</code>  <code>x2</code>, <code>y2</code> 是控制点坐标,<code>x3,</code>y3是终点的坐标。和 <code>rLineTo(x, y)</code> 同理，<code>rCubicTo(dx1, dy1, dx2, dy2, dx3, dy3)</code> 的参数也是<em><strong>相对坐标</strong></em></p>
+<blockquote>
+<p><em><strong>使用它们可以绘制很多圆润又好看的图形,这也是Path最重要的方法。</strong></em></p>
+</blockquote>
+<p>简单介绍一下<em><strong>Path的一些基本方法</strong></em>:</p>
+<p>这里就用代码举个例子</p>
+<pre><code class="language-kotlin">//一般自定义view的绘画部分对象，都是全局对象
+var path = Path() 
+// Path的起点默认为坐标为(0,0)
+
+//画线一定要设置这个Style
+paint.style = Paint.Style.STROKE
+
+//由起点1一条直线连接到(300, 300)
+path.lineTo(700f, 800f)
+
+//将当前点移动到(500, 400)
+//使用这个方法会获得新的起点
+path.moveTo(500f, 400f)
+
+//由起点2一条直线连接到(200, 700)
+path.lineTo(200f, 700f)
+
+// 闭合路径，即连接当前点和起点
+// 即连接(200,700)与起点2(500, 400)
+// 注:此时起点已经进行变换
+//闭合失败
+path.close();
+
+// 画出路径
+canvas.drawPath(path, paint);
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://kanyewestforreal.github.io//post-images/1681908757443.png" alt="" loading="lazy"></figure>
+<pre><code class="language-kotlin">var path = Path() 
+// Path的起点默认为坐标为(0,0)
+
+//画线一定要设置这个Style
+paint.style = Paint.Style.STROKE
+
+//由起点1一条直线连接到(300, 300)
+path.lineTo(700f, 800f)
+
+//将当前点移动到(500, 400)
+//使用这个方法不会获得新的起点
+path.setLastPoint(500f, 400f)
+
+//由(500, 400)一条直线连接到(200, 700)
+path.lineTo(200f, 700f)
+
+// 闭合路径，即连接当前点和起点
+// 即连接(200,700)与(500, 400)
+path.close();
+
+// 画出路径
+canvas.drawPath(path, paint);
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://kanyewestforreal.github.io//post-images/1681908767670.png" alt="" loading="lazy"></figure>
+<p>通过上述大量的<code>drawXXX()方法</code>我们大概可以看出，绘制一个View, 我们需要<em><strong>一个画布(Canvas)</strong></em>，<em><strong>一根笔(Paint)</strong></em>，也要知道<em><strong>在哪起笔(坐标)</strong></em>、以及<em><strong>画多大</strong></em>。</p>
+<p>在<code>drawCircle方法</code>中，圆心坐标和半径，这些都是圆的基本信息，也是它的独有信息。画圆有圆心坐标和半径，画方有吗？画椭圆有吗？这就叫<em><strong>独有信息</strong></em>。</p>
+<p><em>独有信息</em>都是直接作为参数写进 <code>drawXXX()</code> 方法里的（比如 <code>drawCircle(centerX, centerY, radius, paint)</code> 的前三个参数）。</p>
+<p>而除此之外，其他的都是<em><strong>公有信息</strong></em>。比如<em><strong>图形的颜色</strong></em>、<em><strong>空心实心</strong></em>这些，你不管是画圆还是画方都有可能用到的，这些信息则是统一放在 <code>paint</code> 参数里的。</p>
+<p>关于<em><strong>坐标</strong></em>这里插入一下：</p>
+<p>Android中有两个比较常用的坐标系。</p>
+<p>第一个是<em><strong>Android坐标系</strong></em></p>
+<figure data-type="image" tabindex="9"><img src="https://kanyewestforreal.github.io//post-images/1681908796773.jpg" alt="" loading="lazy"></figure>
+<p>从上到下依次是：</p>
+<ol>
+<li>状态栏（包含通知，系统时间），</li>
+<li>应用的标题栏，</li>
+<li><em><strong>应用的View布局栏</strong></em>，</li>
+<li>底部的导航栏。</li>
+</ol>
+<p>第二个<em><strong>View坐标系</strong></em>，也就是在View布局区域中是这这样：</p>
+<figure data-type="image" tabindex="10"><img src="https://kanyewestforreal.github.io//post-images/1681908825456.webp" alt="" loading="lazy"></figure>
+<p>基本介绍完Canvas画布，那么就可以看看Paint画笔</p>
+<h4 id="paint">Paint</h4>
+<p><code>Paint</code> 的 API 大致可以分为 3 类：</p>
+<ul>
+<li>颜色</li>
+<li>效果</li>
+<li>drawText() 相关</li>
+</ul>
+<h5 id="颜色">颜色</h5>
+<p>首先我们需要知道，在Canvas上绘制的内容，可以从三个角度来改变绘制的颜色</p>
+<figure data-type="image" tabindex="11"><img src="https://kanyewestforreal.github.io//post-images/1681908865424.jpeg" alt="" loading="lazy"></figure>
+<h6 id="基础颜色">基础颜色</h6>
+<p>在调用方法确定颜色：颜色直接指定，或是由Paint决定</p>
+<p>除了drawColor\ARBG\Bitmap 也就是图形和文字的绘制，它们的颜色就需要使用 <code>paint</code> 参数来额外设置了。</p>
+<p><code>Paint</code> 设置颜色的方法有两种：<em><strong>一种是直接用 <code>Paint.setColor/ARGB()</code> 来设置颜色</strong></em>，<em><strong>另一种是使用 <code>Shader</code> 来指定着色方案。</strong></em></p>
+<p>这里就直接略过<code>Paint.setColor/ARGB()</code> ，讲一讲<code>Shader</code>着色器。</p>
+<p><em><strong>第一种是LinearGradient 线性渐变</strong></em>：</p>
+<p><code>LinearGradient(float x0, float y0, float x1, float y1, int color0, int color1, Shader.TileMode tile)</code></p>
+<p>从它的构造方法看出，需要设置两个点和两种颜色，以这两个点作为端点，使用两种颜色的渐变来绘制颜色。</p>
+<blockquote>
+<p>参数：<br>
+<code>x0</code> <code>y0</code> <code>x1</code> <code>y1</code>：渐变的两个端点的位置<br>
+<code>color0</code> <code>color1</code> 是端点的颜色<br>
+<code>tile</code>：端点范围之外的着色规则，类型是 <code>TileMode</code>。<code>TileMode</code> 一共有 3 个值可选： <code>CLAMP</code>, <code>MIRROR</code> 和 <code>REPEAT</code>。</p>
+<p>CLAMP:如果着色器超出原始边界，超出的部分延展着色器的边缘颜色</p>
+<p>REPEAT ：如果着色器超出原始边界，复制着色器的图片，包含横向或者竖向</p>
+<p>MIRROR：镜像着色器的内容，倒影形式</p>
+<p>DECAL：渲染着色器原本边界的图像像素，如果超出，绘制黑色透明（可以理解为超出着色器就剪裁）</p>
+<p><strong>其他形状以及文字都可以这样设置颜色</strong></p>
+<p><em><strong>注意：在设置了 <code>Shader</code> 的情况下， <code>Paint.setColor/ARGB()</code> 所设置的颜色就不再起作用。</strong></em></p>
+</blockquote>
+<pre><code class="language-kotlin">   			var lg1 = 
+   					LinearGradient(50f, 200f, 150f, 200f, Color.YELLOW, Color.BLUE, Shader.TileMode.CLAMP)
+paint.shader = lg1
+canvas?.drawCircle(200f, 400f, 100f, paint)
+
+       val lg2 =
+           LinearGradient(400f, 650f, 500f, 650f, Color.YELLOW, Color.BLUE, Shader.TileMode.REPEAT)
+       paint.shader = lg2
+       canvas?.drawRect(200f, 500f, 600f, 800f, paint)
+
+       val lg3 =
+           LinearGradient(200f, 900f, 300f, 900f, Color.YELLOW, Color.BLUE, Shader.TileMode.DECAL)
+       paint.shader = lg3
+       canvas?.drawRect(200f, 900f, 600f, 1200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="12"><img src="https://kanyewestforreal.github.io//post-images/1681908892662.png" alt="" loading="lazy"></figure>
+<p><em><strong>第二种，RadialGradient 辐射渐变</strong></em></p>
+<p><code>RadialGradient(float centerX, float centerY, float radius, int centerColor, int edgeColor, TileMode tileMode)</code>。</p>
+<blockquote>
+<p>参数：<br>
+<code>centerX</code> <code>centerY</code>：辐射中心的坐标<br>
+<code>radius</code>：辐射半径<br>
+<code>centerColor</code>：辐射中心的颜色<br>
+<code>edgeColor</code>：辐射边缘的颜色<br>
+<code>tileMode</code>：辐射范围之外的着色模式。</p>
+</blockquote>
+<pre><code class="language-kotlin">var shader = RadialGradient(300f, 300f, 200f, Color.parseColor(&quot;#E91E63&quot;),
+  Color.parseColor(&quot;#2196F3&quot;), Shader.TileMode.CLAMP)
+paint.setShader(shader)
+
+...
+
+canvas.drawCircle(300f, 300f, 200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="13"><img src="https://kanyewestforreal.github.io//post-images/1681908906690.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>第三种，SweepGradient 扫描渐变</strong></em></p>
+<p><code>SweepGradient(float cx, float cy, int color0, int color1)</code></p>
+<blockquote>
+<p>参数：<br>
+<code>cx</code> <code>cy</code> ：扫描的中心<br>
+<code>color0</code>：扫描的起始颜色<br>
+<code>color1</code>：扫描的终止颜色</p>
+</blockquote>
+<pre><code class="language-kotlin">var shader = SweepGradient(300f, 300f, Color.parseColor(&quot;#E91E63&quot;),
+       Color.parseColor(&quot;#2196F3&quot;))
+paint.shader = shader
+
+...
+
+canvas.drawCircle(300f, 300f, 200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="14"><img src="https://kanyewestforreal.github.io//post-images/1681908917017.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>第四种, BitmapShader</strong></em><br>
+<code>BitmapShader(Bitmap bitmap, Shader.TileMode tileX, Shader.TileMode tileY)</code></p>
+<blockquote>
+<p>参数：<br>
+<code>bitmap</code>：用来做模板的 <code>Bitmap</code> 对象<br>
+<code>tileX</code>：横向的 <code>TileMode</code><br>
+<code>tileY</code>：纵向的 <code>TileMode</code>。</p>
+</blockquote>
+<pre><code class="language-kotlin">var bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.batman)
+var shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+paint.shader = shader
+
+...
+
+canvas.drawCircle(300f, 300f, 200f, paint)
+</code></pre>
+<figure data-type="image" tabindex="15"><img src="https://kanyewestforreal.github.io//post-images/1681908933496.jpeg" alt="" loading="lazy"></figure>
+<blockquote>
+<p>如果试过drawBitmap，我们会发现这样如果要对Bitmap进行几何裁剪，那么使用BitmapShader是比drawBitmap更加方便。</p>
+</blockquote>
+<p><em><strong>第五种，ComposeShader 混合着色器</strong></em></p>
+<p><code>ComposeShader(Shader shaderA, Shader shaderB, PorterDuff.Mode mode)</code></p>
+<blockquote>
+<p>参数：<br>
+<code>shaderA</code>, <code>shaderB</code>：两个相继使用的 <code>Shader</code>，B绘制上A<br>
+<code>mode</code>: 两个 <code>Shader</code> 的叠加模式，即 <code>shaderA</code> 和 <code>shaderB</code> 应该怎样共同绘制。它的类型是 <code>PorterDuff.Mode</code> ,等下详细展开</p>
+</blockquote>
+<pre><code class="language-kotlin">// 第一个 Shader：头像的 Bitmap
+var bitmap1 = BitmapFactory.decodeResource(getResources(), R.drawable.batman)
+var shader1 = BitmapShader(bitmap1, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+
+// 第二个 Shader：从上到下的线性渐变（由透明到黑色）
+var bitmap2 = BitmapFactory.decodeResource(getResources(), R.drawable.batman_logo)
+var shader2 = BitmapShader(bitmap2, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+
+// ComposeShader：结合两个 Shader
+var shader = ComposeShader(shader1, shader2, PorterDuff.Mode.SRC_OVER)
+paint.shader = shader
+
+...
+
+canvas.drawCircle(300f, 300f, 300f, paint);
+</code></pre>
+<figure data-type="image" tabindex="16"><img src="https://kanyewestforreal.github.io//post-images/1681908946118.jpeg" alt="" loading="lazy"></figure>
+<blockquote>
+<p>在刚刚的构造方法中，我们发现了一个新的参数类型<code>PorterDuff.Mode</code> ，是用来<em><strong>指定两个图像共同绘制时的颜色策略</strong></em>的，就是说把<strong>源图像绘制到目标图像处时应该怎样确定二者结合后的颜色</strong>。</p>
+<p><code>PorterDuff.Mode</code> 一共有 17 个，可以分为两类：</p>
+<ol>
+<li>Alpha 合成 (Alpha Compositing)：关于 Alpha 通道（也就是「透明度」）的计算的</li>
+</ol>
+<figure data-type="image" tabindex="17"><img src="https://kanyewestforreal.github.io//post-images/1681908970681.jpeg" alt="" loading="lazy"></figure>
+<ol>
+<li>混合 (Blending)：是 Photoshop 等制图软件里都有的那些混合模式，一般是配合实现设计师各种逆天UI使用</li>
+</ol>
+<figure data-type="image" tabindex="18"><img src="https://kanyewestforreal.github.io//post-images/1681908981262.jpeg" alt="" loading="lazy"></figure>
+</blockquote>
+<h6 id="colorfilter-xfermode">ColorFilter、Xfermode</h6>
+<p>这两个也是使用的非常少的了，如果需要对相片滤镜之类的研究的话，可以进行了解。</p>
+<p><code>ColorFilter</code>主要是为绘制设置颜色过滤，为绘制的内容设置一个统一的过滤策略。</p>
+<p><code>Xfermode</code>是以绘制的内容作为源图像，以 View 中已有的作为目标图像，选取一个 <code>PorterDuff.Mode</code> 作为结果的颜色处理方案。</p>
+<h5 id="效果">效果</h5>
+<p>效果类的 API ，指的就是抗锯齿、填充/轮廓、线条宽度等等这些。</p>
+<p><em><strong>setAntiAlias (boolean aa) 抗锯齿</strong></em></p>
+<p>设置抗锯齿，这应该是绘制图形一般都会启用</p>
+<figure data-type="image" tabindex="19"><img src="https://kanyewestforreal.github.io//post-images/1681908995849.png" alt="" loading="lazy"></figure>
+<p>在Android S以上自动开启</p>
+<p><em><strong>setStrokeWidth(float width)</strong></em> <em><strong>线条宽度</strong></em></p>
+<p>设置线条宽度。单位为像素，默认值是 0。</p>
+<blockquote>
+<p>线条宽度 0 和 1 的区别</p>
+<p>默认情况下，线条宽度为 0，但你会发现，这个时候它依然能够画出线，<strong>效果和设置宽度为 1 像素是一样的</strong>。</p>
+<p>实际上这和Canvas的几何变换有关，<em>可以为</em> <code>Canvas</code> <em>设置</em> <code>Matrix</code> 来实现几何变换（如放大、缩小、平移、旋转），在几何变换之后* <code>Canvas</code> <em>绘制的内容就会发生相应变化，包括线条也会加粗，例如 2 像素宽度的线条在</em> <code>Canvas</code> *放大 2 倍后会被以 4 像素宽度来绘制。而当线条宽度被设置为 0 时，它的宽度就被固定为 1 像素。</p>
+<p>线条宽度为 0 时这叫做<em><strong>发际线模式</strong></em>*「hairline mode」。*🐶</p>
+</blockquote>
+<p><em><strong>setStyle(Paint.Style style)</strong></em></p>
+<p>用来设置图形是线条风格还是填充风格的</p>
+<p><em><strong>如果绘制的不是闭合图案，也就是线条之类的，务必启用Paint.Style.STROKE，否则会显示不出。</strong></em></p>
+<pre><code class="language-kotlin">paint.style = Paint.Style.STROKE // STROKE 模式，画线
+</code></pre>
+<figure data-type="image" tabindex="20"><img src="https://kanyewestforreal.github.io//post-images/1681909011825.jpeg" alt="" loading="lazy"></figure>
+<pre><code class="language-kotlin">paint.styl e= Paint.Style.FILL // FILL 模式，填充
+</code></pre>
+<figure data-type="image" tabindex="21"><img src="https://kanyewestforreal.github.io//post-images/1681909021344.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>setStrokeJoin(Paint.Join join)</strong></em></p>
+<p>设置拐角的形状，一般是绘画Path使用。有三个值可以选择：<code>MITER</code> 尖角、 <code>BEVEL</code> 平角和 <code>ROUND</code> 圆角。默认为 <code>MITER</code>。</p>
+<figure data-type="image" tabindex="22"><img src="https://kanyewestforreal.github.io//post-images/1681909034691.jpeg" alt="" loading="lazy"></figure>
+<p>如果使用MITER的话，如果转角过尖锐，可以了解***setStrokeMiter(float miter)***方法，用于设置 <code>MITER</code> 型拐角的延长线的最大值。</p>
+<figure data-type="image" tabindex="23"><img src="https://kanyewestforreal.github.io//post-images/1681909050946.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>setStrokeCap(Paint.Cap cap)</strong></em></p>
+<p>设置线头的形状，一般是绘画Path使用。线头形状有三种：<code>BUTT</code> 平头、<code>ROUND</code> 圆头、<code>SQUARE</code> 方头。默认为 <code>BUTT</code>。</p>
+<figure data-type="image" tabindex="24"><img src="https://kanyewestforreal.github.io//post-images/1681909064937.jpeg" alt="" loading="lazy"></figure>
+<p><em><strong>setFilterBitmap(boolean filter)</strong></em></p>
+<p>设置是否使用<em><strong>双线性过滤来绘制 <code>Bitmap</code></strong></em> 。</p>
+<p>在Android S以上也是默认开启。</p>
+<p>图像在放大绘制的时候，默认使用的是最近邻插值过滤，这种算法简单，但会出现马赛克现象；而如果开启了双线性过滤，就可以让结果图像显得更加平滑。也是基本都会开启。</p>
+<figure data-type="image" tabindex="25"><img src="https://kanyewestforreal.github.io//post-images/1681909075395.jpeg" alt="" loading="lazy"></figure>
+<h5 id="drawtext-相关">drawText() 相关</h5>
+<h3 id="布局">布局</h3>
+<p>//TODO</p>
+<h3 id="触摸反馈事件分发">触摸反馈/事件分发</h3>
+<p>//TODO</p>
+<h2 id="参考资料">参考资料：</h2>
+<p>https://rengwuxian.com/ui-1-1/</p>
+<p>https://juejin.cn/post/6996568363581308959</p>
+<p>https://www.jianshu.com/p/705a6cb6bfee</p>
+<p>https://blog.csdn.net/axi295309066/article/details/59798506</p>
+<p>https://zh.wikipedia.org/wiki/%E5%8F%8C%E7%BA%BF%E6%80%A7%E8%BF%87%E6%BB%A4</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E5%89%8D%E8%A8%80">前言</a></li>
+<li><a href="#%E5%8E%9F%E7%94%9F%E8%87%AA%E5%AE%9A%E4%B9%89view%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86">原生自定义View基础知识</a>
+<ul>
+<li><a href="#%E5%89%8D%E8%A8%80-2">前言</a>
+<ul>
+<li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89view%E7%9A%84%E5%88%86%E7%B1%BB">自定义View的分类</a></li>
+</ul>
+</li>
+<li><a href="#%E7%BB%98%E5%88%B6">绘制</a>
+<ul>
+<li><a href="#%E4%B8%80%E5%88%87%E7%9A%84%E5%BC%80%E5%A7%8Bondraw">一切的开始：onDraw()</a></li>
+<li><a href="#canvasdrawxxx%E5%B8%B8%E8%A7%81%E6%96%B9%E6%B3%95">Canvas.drawXXX常见方法</a>
+<ul>
+<li><a href="#%E9%A2%9C%E8%89%B2%E5%A1%AB%E5%85%85">颜色填充</a></li>
+<li><a href="#%E7%94%BB%E5%9C%86">画圆</a></li>
+<li><a href="#%E7%94%BB-bitmap">画 Bitmap</a></li>
+<li><a href="#%E7%94%BB%E7%9F%A9%E5%BD%A2">画矩形</a></li>
+<li><a href="#%E7%94%BB%E7%82%B9">画点</a></li>
+<li><a href="#%E7%94%BB%E6%A4%AD%E5%9C%86">画椭圆</a></li>
+<li><a href="#%E7%94%BB%E7%BA%BF">画线</a></li>
+<li><a href="#%E7%94%BB%E5%9C%86%E8%A7%92%E7%9F%A9%E5%BD%A2">画圆角矩形</a></li>
+<li><a href="#%E7%BB%98%E5%88%B6%E5%BC%A7%E5%BD%A2%E6%88%96%E6%89%87%E5%BD%A2">绘制弧形或扇形</a></li>
+<li><a href="#%E7%BB%98%E5%88%B6%E6%96%87%E5%AD%97">绘制文字</a></li>
+<li><a href="#%E7%94%BB%E8%87%AA%E5%AE%9A%E4%B9%89%E5%9B%BE%E5%BD%A2">画自定义图形</a></li>
+</ul>
+</li>
+<li><a href="#paint">Paint</a>
+<ul>
+<li><a href="#%E9%A2%9C%E8%89%B2">颜色</a>
+<ul>
+<li><a href="#%E5%9F%BA%E7%A1%80%E9%A2%9C%E8%89%B2">基础颜色</a></li>
+<li><a href="#colorfilter-xfermode">ColorFilter、Xfermode</a></li>
+</ul>
+</li>
+<li><a href="#%E6%95%88%E6%9E%9C">效果</a></li>
+<li><a href="#drawtext-%E7%9B%B8%E5%85%B3">drawText() 相关</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E5%B8%83%E5%B1%80">布局</a></li>
+<li><a href="#%E8%A7%A6%E6%91%B8%E5%8F%8D%E9%A6%88%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91">触摸反馈/事件分发</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99">参考资料：</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://kanyewestforreal.github.io/post/algorithm_summary/">
+              <h3 class="post-title">
+                算法小结
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  This blog is just for me to record the questions, which in my developing.
+  <a class="rss" href="https://kanyewestforreal.github.io//atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
