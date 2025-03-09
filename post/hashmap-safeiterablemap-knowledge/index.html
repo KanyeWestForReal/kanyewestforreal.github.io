@@ -1,0 +1,705 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HashMap番外篇——SafeIterableMap 重点 | Grinofith&#39;s Blog</title>
+<link rel="shortcut icon" href="https://kanyewestforreal.github.io//favicon.ico?v=1741497022322">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://kanyewestforreal.github.io//styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="HashMap番外篇——SafeIterableMap 重点 | Grinofith&#39;s Blog - Atom Feed" href="https://kanyewestforreal.github.io//atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Pre
+作为HashMap的Extra篇。
+SafeIterableMap是作为一个偏工具的数据结构，所以是以阅读源码为主，而不像框架一样，主要的是学习其架构思路和设计哲学。
+对于SafeIterableMap，很容易“以貌取人”，实际上S..." />
+    <meta name="keywords" content="Java,Android" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <!-- <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script> -->
+    <script src="/media/js/highlight/highlight.min.js"></script>
+    <script src="/media/js/sroll_markdown_titile_list.js"></script>
+    <link rel="stylesheet" type="text/css" href="/media/js/highlight/styles/atom-one-dark.css">
+    <script>hljs.highlightAll();</script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://kanyewestforreal.github.io/">
+  <img class="avatar" src="https://kanyewestforreal.github.io//images/avatar.png?v=1741497022322" alt="">
+  </a>
+  <h1 class="site-title">
+    Grinofith&#39;s Blog
+  </h1>
+  <p class="site-description">
+    The key is seriously reflecting.
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              HashMap番外篇——SafeIterableMap 重点
+            </h2>
+            <div class="post-info">
+              <span>
+                2025-02-26
+              </span>
+              <span>
+                17 min read
+              </span>
+              
+                <a href="https://kanyewestforreal.github.io/tag/java/" class="post-tag">
+                  # Java
+                </a>
+              
+                <a href="https://kanyewestforreal.github.io/tag/AndroidTAG/" class="post-tag">
+                  # Android
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://kanyewestforreal.github.io//post-images/hashmap-safeiterablemap-knowledge.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h2 id="pre">Pre</h2>
+<p>作为<code>HashMap</code>的Extra篇。</p>
+<p><code>SafeIterableMap</code>是作为一个偏工具的数据结构，所以是以阅读源码为主，而不像框架一样，主要的是学习其架构思路和设计哲学。</p>
+<p>对于<code>SafeIterableMap</code>，很容易“以貌取人”，实际上<code>SafeIterableMap</code>并没有实现Map接口，而是实现了<code>Iterable</code>接口。所以实际上来看，<code>SafeIterableMap</code>是一个<strong>链表</strong>。</p>
+<pre><code class="language-java">public class FastSafeIterableMap&lt;K, V&gt; extends SafeIterableMap&lt;K, V&gt; {
+    
+    ......
+}
+
+
+//SafeIterableMap实现了Iterable接口
+public class SafeIterableMap&lt;K, V&gt; implements Iterable&lt;Map.Entry&lt;K, V&gt;&gt; {
+
+    ......
+}
+</code></pre>
+<h2 id="特性">特性</h2>
+<ol>
+<li>
+<p>支持键值对存储，用链表实现，不过伪装成Map。</p>
+</li>
+<li>
+<p>支持在遍历的过程中编辑集合，不会抛出<strong>ConcurrentModifiedException</strong>。（只能调用map的put 或者 remove方法实现编辑，而<strong>不是调用Iterator的remove方法</strong>，Iterator的remove方法<strong>默认实现</strong>是抛出 <strong>UnsupportedOperationException</strong>）</p>
+<pre><code class="language-java">default void remove() {
+        throw new UnsupportedOperationException(&quot;remove&quot;);
+}
+</code></pre>
+</li>
+<li>
+<p><strong>非线程安全</strong>。</p>
+</li>
+</ol>
+<blockquote>
+<p>LinkedList, which pretends to be a map and supports modifications during iterations. It is NOT thread safe.<br>
+Type parameters:<br>
+<K> – Key type<br>
+<V> – Value type</p>
+</blockquote>
+<h2 id="源码">源码</h2>
+<p>非常清晰明了的结构图。</p>
+<figure data-type="image" tabindex="1"><img src="https://kanyewestforreal.github.io//post-images/1740567840647.jpeg" alt="SafeIterableMap" loading="lazy"></figure>
+<blockquote>
+<p>图自 https://blog.csdn.net/Just_keep/article/details/129755102</p>
+</blockquote>
+<h3 id="基础属性">基础属性</h3>
+<p><code>SafeIterableMap</code>类中的属性还是比较少的。</p>
+<pre><code class="language-java">public class SafeIterableMap&lt;K, V&gt; implements Iterable&lt;Map.Entry&lt;K, V&gt;&gt; {
+    Entry&lt;K, V&gt; mStart; //头节点
+    private Entry&lt;K, V&gt; mEnd; //尾节点 注意这里可以把头节点理解为dummy节点，尾节点理解为游标，详细看put方法
+    //在这里使用 WeakHashMap 而不是 List&lt;WeakReference&gt;，是因为可以不必手动删除包含 null 的 WeakReferences，这是可以学习的Trick。
+    //这个属性是算是SIM的关键属性。
+    //详细见后文——————为什么SafeIterableMap支持迭代中修改#SafeIterableMap#remove
+    private final WeakHashMap&lt;SupportRemove&lt;K, V&gt;, Boolean&gt; mIterators = new WeakHashMap&lt;&gt;(); //与迭代器有关，注意这里的Boolean没有什么用，put时都是false，WeakHashMap 可以帮助清理掉key已经被回收的entry
+    private int mSize = 0; // 当前集合中的元素个数
+    ...
+}
+</code></pre>
+<h3 id="关键的数据结构">关键的数据结构</h3>
+<pre><code class="language-java">static class Entry&lt;K, V&gt; implements Map.Entry&lt;K, V&gt; {
+        final K mKey; //自己的key
+        final V mValue; //自己的value
+        Entry&lt;K, V&gt; mNext; //指向下一个元素的指针
+        Entry&lt;K, V&gt; mPrevious; //指向上一个的指针
+		...
+        @Override
+        public V setValue(V value) {
+            //只能通过构造函数传入
+            throw new UnsupportedOperationException(&quot;An entry modification is not supported&quot;);
+        }
+        ....
+    }
+</code></pre>
+<p>配合链表使用的话，数据结构实际上长这样。</p>
+<figure data-type="image" tabindex="2"><img src="https://kanyewestforreal.github.io//post-images/1740567861714.png" alt="SIM_Entry" loading="lazy"></figure>
+<blockquote>
+<p>图自 https://juejin.cn/post/6844904061519544334</p>
+</blockquote>
+<h3 id="主要还是put-get方法的实现">主要还是put、get方法的实现</h3>
+<h4 id="put方法">put方法</h4>
+<pre><code class="language-java">//putIfAbsent方法 关键
+public V putIfAbsent(@NonNull K key, @NonNull V v) {
+        //检查之前对应的key是否存在
+        Entry&lt;K, V&gt; entry = get(key);
+        if (entry != null) {
+            //存在就不put了，直接返回，不会覆盖原来的值，只是把之前存入的值返回
+            return entry.mValue;
+        }
+    	//否则put，见下面
+        put(key, v);
+        return null;
+}
+
+protected Entry&lt;K, V&gt; put(@NonNull K key, @NonNull V v) {
+    	//走到这，说明key必然不存在
+        Entry&lt;K, V&gt; newEntry = new Entry&lt;&gt;(key, v);
+        //链表长度增加
+        mSize++;
+    	//尾节点为空，其实头节点为空也同理，说明是第一次put
+        if (mEnd == null) {
+            //假如是第一次put，则设置新的节点作为mStart头节点，尾节点mEnd也指向新的节点（头节点）
+            mStart = newEntry;
+            mEnd = mStart;
+            return newEntry;
+        }
+        //不是第一次put，尾插法
+    	//把mStart当成dummy节点，mEnd当成游标
+    	//则把mEnd的next指向newEntry，newEntry的previous指向之前的mEnd，mEnd移动指向newEntry，后续的添加就是依照上面，但是有着pre的属性，变成双向链表。
+        //从这里我们知道mEnd和mStarr的mPrevious，始终为null
+        mEnd.mNext = newEntry;
+        newEntry.mPrevious = mEnd;
+        mEnd = newEntry;
+        return newEntry;
+    }
+</code></pre>
+<h4 id="get方法">get方法</h4>
+<pre><code class="language-java">protected Entry&lt;K, V&gt; get(K k) {
+       Entry&lt;K, V&gt; currentNode = mStart;
+       //链表的遍历
+       //从mStart开始遍历
+       while (currentNode != null) {
+           if (currentNode.mKey.equals(k)) {
+               //找到则返回
+               break;
+           }
+           //否则继续
+           currentNode = currentNode.mNext;
+       }
+       //没有找到返回mStart头部
+       return currentNode;
+   }
+</code></pre>
+<h2 id="为什么safeiterablemap支持迭代中修改">为什么SafeIterableMap支持迭代中修改？</h2>
+<p><code>SafeIterableMap</code> 支持迭代过程中支持修改操作，是因为 <strong>自定义的Iterator</strong> 支持了。</p>
+<p><code>SafeIterableMap</code> 一共有三个 Iterator 实现类：</p>
+<p><code>AscendingIterator</code> （顺序迭代，不包括在迭代期间添加的新元素）</p>
+<p><code>DescendingIterator</code> （逆序迭代，不包括在迭代期间添加的新元素）</p>
+<p><code>IteratorWithAdditions</code>（顺序迭代，包括在迭代期间添加的新元素）</p>
+<p>也就是说，</p>
+<p>如果使用<code>AscendingIterator</code> /<code>DescendingIterator</code> 进行迭代，那么是无法遍历到在迭代期间添加的新元素的，调用map的put 或者 remove方法实现编辑是不会抛出<code>ConcurrentModificationException</code>，但是如果使用Iterator进行remove还是会抛出<code>UnsupportedOperationException</code>。</p>
+<p>如果使用<code>IteratorWithAdditions</code>进行迭代，是可以遍历到在迭代期间添加的新元素的，后续同理。</p>
+<h3 id="原理">原理</h3>
+<p>从源码开始。</p>
+<h4 id="supportremove-listiterator">SupportRemove &amp;&amp; ListIterator</h4>
+<pre><code class="language-java">//SupportRemove 很简单
+public abstract static class SupportRemove&lt;K, V&gt; {
+        abstract void supportRemove(@NonNull Entry&lt;K, V&gt; entry);
+}
+
+private abstract static class ListIterator&lt;K, V&gt; extends SupportRemove&lt;K, V&gt;
+            implements Iterator&lt;Map.Entry&lt;K, V&gt;&gt; { 
+    	//注意继承了SupportRemove&lt;K, V&gt;
+    	//预期结束节点
+        Entry&lt;K, V&gt; mExpectedEnd;
+        Entry&lt;K, V&gt; mNext;
+        ListIterator(Entry&lt;K, V&gt; start, Entry&lt;K, V&gt; expectedEnd) {
+            this.mExpectedEnd = expectedEnd;
+            this.mNext = start;
+        }
+        @Override
+        public boolean hasNext() {
+            //不存在mNext则遍历完成
+            return mNext != null;
+        }
+        @SuppressWarnings(&quot;ReferenceEquality&quot;)
+        @Override
+    	//注意这里并不是实际的删除方法，SafeIterableMap#remove才是实际的删除方法
+    	//这里只是处理一些删除节点时的额外的逻辑，比如尾节点的指向变化、mNext这个游标指针的移动
+        public void supportRemove(@NonNull Entry&lt;K, V&gt; entry) {
+            //该方法由SafeIterableMap的remove触发
+            //而不是由Iterator#remove触发 见后续的SafeIterableMap#remove方法
+            //假如移除的entry是最后一个，同时是mNext
+            if (mExpectedEnd == entry &amp;&amp; entry == mNext) {
+                //则把这两个清空
+                mNext = null;
+                mExpectedEnd = null;
+            }
+            //假如移除最后一个，则把mExpectedEnd指向他的前一个
+            if (mExpectedEnd == entry) {
+                mExpectedEnd = backward(mExpectedEnd);
+            }    
+            //假如需要移除的是mNext，则把mNext指向下一个
+            if (mNext == entry) {
+                mNext = nextNode();
+            }
+        }
+        @SuppressWarnings(&quot;ReferenceEquality&quot;)
+        private Entry&lt;K, V&gt; nextNode() {
+            //获取下一个节点，由next()调用
+            //假如不存在了就不处理，否则返回他的下一个，这个方法不对mNext进行修改，而是由next方法修改
+            //链表没有下一个了或者为空，那么返回null
+            //否则 return forward(mNext) 指向下一个
+            if (mNext == mExpectedEnd || mExpectedEnd == null) {
+                return null;
+            }
+            return forward(mNext);
+        }
+    
+    	//这才是Iterator调用的方法
+        @Override
+        public Map.Entry&lt;K, V&gt; next() {
+            //mNext预先获取下一个
+            Map.Entry&lt;K, V&gt; result = mNext;
+            //校对mNext指针，这个方法对mNext进行修改
+            mNext = nextNode();
+            return result;
+        }
+        //下面两个由子类实现
+        abstract Entry&lt;K, V&gt; forward(Entry&lt;K, V&gt; entry);
+        abstract Entry&lt;K, V&gt; backward(Entry&lt;K, V&gt; entry);
+    }
+</code></pre>
+<h4 id="ascendingiterator-descendingiterator">AscendingIterator &amp;&amp; DescendingIterator</h4>
+<pre><code class="language-java">static class AscendingIterator&lt;K, V&gt; extends ListIterator&lt;K, V&gt; {
+        //传入头部和尾部
+        AscendingIterator(Entry&lt;K, V&gt; start, Entry&lt;K, V&gt; expectedEnd) {
+            super(start, expectedEnd);
+        }
+    
+//        DescendingIterator(Entry&lt;K, V&gt; start, Entry&lt;K, V&gt; expectedEnd) {
+//           super(start, expectedEnd);
+//        }
+
+        @Override
+        Entry&lt;K, V&gt; forward(Entry&lt;K, V&gt; entry) {
+        	//前进，返回下一个节点
+            return entry.mNext;
+            
+            //假如是DescendingIterator则返回上一个节点
+            //return entry.mPrevious;
+        }
+
+        @Override
+        Entry&lt;K, V&gt; backward(Entry&lt;K, V&gt; entry) {
+            //后撤，返回上一个节点
+            return entry.mPrevious;
+            
+            //假如是DescendingIterator则返回下一个节点
+            //return entry.mNext;
+
+        }
+    }
+
+    @NonNull
+    @Override
+    public Iterator&lt;Map.Entry&lt;K, V&gt;&gt; iterator() {
+        ListIterator&lt;K, V&gt; iterator = new AscendingIterator&lt;&gt;(mStart, mEnd);
+        //注意获取迭代器时，都迭代器都放入了mIterators，false是没有意义的stub。
+        //为什么要往mIterators中放入迭代器，请看下文。
+        mIterators.put(iterator, false);
+        return iterator;
+    }
+
+    @NonNull
+    public Iterator&lt;Map.Entry&lt;K, V&gt;&gt; descendingIterator() {
+        DescendingIterator&lt;K, V&gt; iterator = new DescendingIterator&lt;&gt;(mEnd, mStart);
+        //
+        mIterators.put(iterator, false);
+        return iterator;
+    }
+
+    @NonNull
+    public IteratorWithAdditions iteratorWithAdditions() {
+        IteratorWithAdditions iterator = new IteratorWithAdditions();
+        //
+        mIterators.put(iterator, false);
+        return iterator;
+    }
+
+</code></pre>
+<h4 id="iteratorwithadditions">IteratorWithAdditions</h4>
+<pre><code class="language-java">private class IteratorWithAdditions implements Iterator&lt;Map.Entry&lt;K, V&gt;&gt; extends SupportRemove&lt;K, V&gt;   {
+        //继承自SupportRemove，而非ListIterator
+    	//所以IteratorWithAdditions，并非使用头、尾节点来实现链表的遍历
+    	//只使用头节点配合mCurrent，从而实现即使动态添加节点，也能遍历到。
+        //当前节点
+        private Entry&lt;K, V&gt; mCurrent;
+        //开始之前：控制是否为初始状态
+    	//默认为true，用于控制从哪里开始迭代
+        private boolean mBeforeStart = true;
+
+        IteratorWithAdditions() {
+        }
+    
+    	//首先要明白，iterator的一般执行顺序是 hasNext -&gt; next -&gt; (remove) -&gt; hasNext
+
+        @SuppressWarnings(&quot;ReferenceEquality&quot;)
+        @Override
+    	//注意：这里并不是实际的删除方法，SafeIterableMap#remove才是实际的删除方法
+    	//这里只是处理一些删除节点时的额外的逻辑，从而确保删除后，能够正确的迭代。
+        public void supportRemove(@NonNull Entry&lt;K, V&gt; entry) {
+            if (entry == mCurrent) {
+            	//假如移除的是当前的节点，将当前节点回退到前驱节点
+            	mCurrent = mCurrent.mPrevious;
+                
+                //然后进行判断 mCurrent是否为null
+                //null 说明移除的节点是头节点（只有头节点的Previous为空），为了确保不漏掉头节点，设置mBeforeStart为 true，这样才能不漏掉头节点（next方法中）
+                //非null 说明移除的节点是中间的节点，搭桥操作在 后续的 SafeIterableMap#remove中完成了，能够指向移除节点的后继节点），由于链表的数据结构，能够正常迭代下去，设置为false
+                mBeforeStart = mCurrent == null;
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            //是初始状态？是则判断头节点是否为null
+            if (mBeforeStart) {
+                //只有在执行前next(), 或者进行remove()后, 才会走这里
+                
+                //true 说明链表不为空
+                //false 说明链表为空
+                return mStart != null;
+            }
+            //不是初始状态
+            //判断mCurrent以及mCurrent.mNext是否为null
+            //为什么判断mCurrent != null？需要考虑空链表时，先调用next再调用hasNext
+            //算是防御性编程
+            //检查当前节点是否有后继节点
+            return mCurrent != null &amp;&amp; mCurrent.mNext != null;
+        }
+
+        @Override
+        public Map.Entry&lt;K, V&gt; next() {
+            //是初始状态？是则初始化mCurrent，返回头节点
+            if (mBeforeStart) {
+                mBeforeStart = false;
+                //返回头节点
+                mCurrent = mStart;
+            } else {
+                //不是初始状态，则返回 mCurrent.mNext
+                //注意：如果没有mBeforeStart，就会漏过第一个节点
+                //因为返回的是 mCurrent.mNext
+                //为什么判断mCurrent != null？需要考虑空链表时，两次调用next
+                mCurrent = mCurrent != null ? mCurrent.mNext : null;
+            }
+            return mCurrent;
+        }
+    }
+</code></pre>
+<h4 id="safeiterablemapremove">SafeIterableMap#remove</h4>
+<p>SupportRemove方法就在这里被调用。</p>
+<pre><code class="language-java">//从此映射中删除键的映射（如果存在）。
+//Params： key – 要从 map 中删除其映射的键返回：与指定键关联的前一个值，如果键没有映射，则为 null。
+public V remove(@NonNull K key) {
+        //通过get方法的进行链表遍历
+    	//寻找是否存在key，不存在则返回null
+        Entry&lt;K, V&gt; toRemove = get(key);
+        if (toRemove == null) {
+            return null;
+        }
+        //存在，则先size--，链表大小变化
+        mSize--;
+    	//如果mIterators不为空，就“通知”mIterators内的 每一个 迭代器，把其中的key对应的Entry删除，使得每一个迭代器都能感知到这个操作，从而实现 支持删除 的功能。
+        if (!mIterators.isEmpty()) {
+            for (SupportRemove&lt;K, V&gt; iter : mIterators.keySet()) {
+                iter.supportRemove(toRemove);
+            }
+        }
+    	//比较经典的链表操作。其实我们可以想像是搭一座天桥、或者是对整列火车进行操作。
+    	//删除其中一节火车，同时保证整列火车正常运行，就要让被删除的前一节，指向，被删除的后一节
+        //前者不为null则把前者的next指向toRemove的next
+        if (toRemove.mPrevious != null) {
+            toRemove.mPrevious.mNext = toRemove.mNext;
+        } else {
+            mStart = toRemove.mNext;
+        }
+        //如果他的后者不为null，则把他的后者的mPrevious指向他的mPrevious
+        if (toRemove.mNext != null) {
+            toRemove.mNext.mPrevious = toRemove.mPrevious;
+        } else {
+            mEnd = toRemove.mPrevious;
+        }
+        //然后置空
+    	//这里其实是比较容易忘记的！
+        toRemove.mNext = null;
+        toRemove.mPrevious = null;
+        //返回值
+        return toRemove.mValue;
+    }
+</code></pre>
+<h2 id="为什么-aidi-无法遍历迭代期间添加的新元素">为什么 AI/DI 无法遍历迭代期间添加的新元素？</h2>
+<p><code>AscendingIterator</code> 无法遍历迭代期间添加的新元素，原因在于其 <strong>固定的预期结束节点（<code>mExpectedEnd</code>）</strong> 【见上述ListIterator源码】</p>
+<h3 id="ascendingiterator-的设计限制">AscendingIterator 的设计限制</h3>
+<ul>
+<li>构造函数中传入 <code>start</code>（起始节点）和 <code>expectedEnd</code>（预期结束节点）。</li>
+<li>在 <code>nextNode()</code> 方法中，当当前节点 <code>mNext</code> 等于 <code>mExpectedEnd</code> 时，返回 <code>null</code>，终止遍历。</li>
+<li><strong>预期结束节点 <code>mExpectedEnd</code> 在迭代过程中不会更新</strong>。</li>
+</ul>
+<h3 id="对比-iteratorwithadditions的动态性">对比 IteratorWithAdditions的动态性</h3>
+<ul>
+<li><code>IteratorWithAdditions</code> 没有固定的结束节点，而是通过检查当前节点的 <code>mNext</code> 是否存在来决定是否继续遍历。</li>
+<li>如果在迭代期间添加新元素到链表尾部，<code>IteratorWithAdditions</code> 的 <code>hasNext()</code> 会发现新的 <code>mNext</code>，从而继续遍历。</li>
+</ul>
+<h2 id="为什么其他集合非并发集合不支持迭代中修改">为什么其他集合（非并发集合）不支持迭代中修改？</h2>
+<p>因为集合内部有一个<code>modCount</code>变量记录修改次数。</p>
+<p>每修改一次 <code>modCount</code> 都会+1，迭代集合时<code>Iterator</code> 在被创建出来时记录了集合当前的一个状态，比如集合的修改次数<code>modCount</code> ，集合的<code>size</code>等。</p>
+<p>在调用Iterator方法进行迭代的时候会去判断<code>Iterator</code> 中记录的<code>modCount</code> 次数是否和集合中最新的<code>modCount</code> 是否相等。如果相等意味着集合没有发生修改，如果不相等意味着集合一定发生了修改，那么就会抛出<strong>ConcurrentModificationException</strong>。</p>
+<p>这是一个设计上的决策，为了实现<code>快速失败(fail-fast)</code>机制，可以帮助开发者尽早发现并发修改的问题。</p>
+<p>tips：比如，<code>CopyOnWriteArrayList</code> 这样的并发集合，在迭代时允许修改，因为它在修改时会创建底层数组的新副本，所以迭代器使用的是旧的数组快照，不会抛出异常。以及，Java 8的Stream API在处理集合时，如果在流操作过程中修改源集合，也可能导致不确定的行为或异常。因此，通常建议不要在流处理期间修改源集合。</p>
+<h1 id="引申-fastsafeiterablemap">引申 FastSafeIterableMap</h1>
+<p>在Lifecycle中出现，所以就此记录一下，其中的<code>Fast</code>是如何实现的。</p>
+<p>代码非常短，所以就直接整个呈现上来了。</p>
+<p>FastSafeIterableMap重写了<code>get</code>，<code>putIfAbsent</code>,<code>remove</code>方法。</p>
+<p>而且使用的是HashMap去存储元素，类型是<code>HashMap&lt;K, Entry&lt;K, V&gt;&gt;</code>。</p>
+<p>HashMap存储的是<code>&lt;K, Entry&lt;K, V&gt;&gt;</code>，<code>Entry&lt;K, V&gt;</code>是SIM中关键的数据结构（上文有解析），是包裹了一层的。</p>
+<pre><code class="language-kotlin">    private var observerMap = FastSafeIterableMap&lt;LifecycleObserver, ObserverWithState&gt;()
+
+override fun addObserver(observer: LifecycleObserver) {
+        enforceMainThreadIfNeeded(&quot;addObserver&quot;)
+        val initialState = if (state == State.DESTROYED) State.DESTROYED else State.INITIALIZED
+        val statefulObserver = ObserverWithState(observer, initialState)
+        //LifecycleRegistry#addObserver调用的是`putIfAbsent`方法
+        val previous = observerMap.putIfAbsent(observer, statefulObserver)
+        if (previous != null) {
+            return
+        }
+        ...
+    }
+</code></pre>
+<p>FastSafeIterableMap</p>
+<pre><code class="language-java">public class FastSafeIterableMap&lt;K, V&gt; extends SafeIterableMap&lt;K, V&gt; {
+	//继承了SafeIterableMap
+    
+    //这里有一个mHashMap！
+    private final HashMap&lt;K, Entry&lt;K, V&gt;&gt; mHashMap = new HashMap&lt;&gt;();
+
+    @Nullable
+    @SuppressWarnings(&quot;HiddenTypeParameter&quot;)
+    @Override
+    protected Entry&lt;K, V&gt; get(K k) {
+        //从HashMap中获取Entry&lt;K, V&gt;
+        //相对于LifecycleRegistry则是
+        //Key是Observer，返回Entry&lt;LifecycleObserver, ObserverWithState&gt;
+        return mHashMap.get(k);
+    }
+
+    @Override
+    public V putIfAbsent(@NonNull K key, @NonNull V v) {
+        //先查找HashMap中是否存在这个Key对应的Enrty&lt;K,V&gt;，存在直接返回
+        Entry&lt;K, V&gt; current = get(key);
+        //注意：不会覆盖原来的值，只是把之前存入的值返回
+        if (current != null) {
+            return current.mValue;
+        }
+        //不存在，则存储这个Enrty&lt;K,V&gt;进入HashMap
+        //相对于LifecycleRegistry则是
+        //Key是Observer，存入Entry&lt;LifecycleObserver, ObserverWithState&gt;
+        //put方法是父类的, 会返回一个Entry&lt;K, V&gt;
+        mHashMap.put(key, put(key, v));
+        return null;
+    }
+
+    @Override
+    public V remove(@NonNull K key) {
+        V removed = super.remove(key);
+        //不仅把本身(SIM)的也删除，HashMap中存储的也删除。
+        mHashMap.remove(key);
+        return removed;
+    }
+	
+    //这里是Trick，也是“Fast”之处，为什么使用配合SIM也一目了然。
+    //HashMap可以实现O(1)的快速查找，SIM由于是链表，查找最差会到达On级别
+    public boolean contains(K key) {
+        return mHashMap.containsKey(key);
+    }
+
+    //返回，给定Key关联的Entry的，前一个的Entry。
+    //为什么要返回前一个Entry，详细请见————Lifecycle的源码阅读记录
+    @Nullable
+    public Map.Entry&lt;K, V&gt; ceil(K k) {
+        if (contains(k)) {
+            return mHashMap.get(k).mPrevious;
+        }
+        return null;
+    }
+}
+</code></pre>
+<h2 id="参考">参考</h2>
+<blockquote>
+<p>https://blog.csdn.net/Just_keep/article/details/129755102</p>
+<p>https://liweijieok.github.io/2021/04/26/FastSafeIterableMap/</p>
+</blockquote>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#pre">Pre</a></li>
+<li><a href="#%E7%89%B9%E6%80%A7">特性</a></li>
+<li><a href="#%E6%BA%90%E7%A0%81">源码</a>
+<ul>
+<li><a href="#%E5%9F%BA%E7%A1%80%E5%B1%9E%E6%80%A7">基础属性</a></li>
+<li><a href="#%E5%85%B3%E9%94%AE%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84">关键的数据结构</a></li>
+<li><a href="#%E4%B8%BB%E8%A6%81%E8%BF%98%E6%98%AFput-get%E6%96%B9%E6%B3%95%E7%9A%84%E5%AE%9E%E7%8E%B0">主要还是put、get方法的实现</a>
+<ul>
+<li><a href="#put%E6%96%B9%E6%B3%95">put方法</a></li>
+<li><a href="#get%E6%96%B9%E6%B3%95">get方法</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88safeiterablemap%E6%94%AF%E6%8C%81%E8%BF%AD%E4%BB%A3%E4%B8%AD%E4%BF%AE%E6%94%B9">为什么SafeIterableMap支持迭代中修改？</a>
+<ul>
+<li><a href="#%E5%8E%9F%E7%90%86">原理</a>
+<ul>
+<li><a href="#supportremove-listiterator">SupportRemove &amp;&amp; ListIterator</a></li>
+<li><a href="#ascendingiterator-descendingiterator">AscendingIterator &amp;&amp; DescendingIterator</a></li>
+<li><a href="#iteratorwithadditions">IteratorWithAdditions</a></li>
+<li><a href="#safeiterablemapremove">SafeIterableMap#remove</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88-aidi-%E6%97%A0%E6%B3%95%E9%81%8D%E5%8E%86%E8%BF%AD%E4%BB%A3%E6%9C%9F%E9%97%B4%E6%B7%BB%E5%8A%A0%E7%9A%84%E6%96%B0%E5%85%83%E7%B4%A0">为什么 AI/DI 无法遍历迭代期间添加的新元素？</a>
+<ul>
+<li><a href="#ascendingiterator-%E7%9A%84%E8%AE%BE%E8%AE%A1%E9%99%90%E5%88%B6">AscendingIterator 的设计限制</a></li>
+<li><a href="#%E5%AF%B9%E6%AF%94-iteratorwithadditions%E7%9A%84%E5%8A%A8%E6%80%81%E6%80%A7">对比 IteratorWithAdditions的动态性</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%B6%E4%BB%96%E9%9B%86%E5%90%88%E9%9D%9E%E5%B9%B6%E5%8F%91%E9%9B%86%E5%90%88%E4%B8%8D%E6%94%AF%E6%8C%81%E8%BF%AD%E4%BB%A3%E4%B8%AD%E4%BF%AE%E6%94%B9">为什么其他集合（非并发集合）不支持迭代中修改？</a></li>
+</ul>
+</li>
+<li><a href="#%E5%BC%95%E7%94%B3-fastsafeiterablemap">引申 FastSafeIterableMap</a>
+<ul>
+<li><a href="#%E5%8F%82%E8%80%83">参考</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://kanyewestforreal.github.io/post/hashmap-knowledge/">
+              <h3 class="post-title">
+                HashMap 知识点
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  This blog is just for me to record the questions, which in my developing.
+  <a class="rss" href="https://kanyewestforreal.github.io//atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

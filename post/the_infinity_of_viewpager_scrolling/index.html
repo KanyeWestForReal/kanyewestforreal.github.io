@@ -1,0 +1,248 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>关于ViewPager无限循环问题 | Grinofith&#39;s Blog</title>
+<link rel="shortcut icon" href="https://kanyewestforreal.github.io//favicon.ico?v=1741497022322">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://kanyewestforreal.github.io//styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="关于ViewPager无限循环问题 | Grinofith&#39;s Blog - Atom Feed" href="https://kanyewestforreal.github.io//atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+If this cover violates your rights, please contact me
+背景：最近为了完善音乐播放器的滑动播放功能，选择在展开这方面的尝试。
+
+对于题目展示的问题，根据网上资料总结一共有三种办法。
+第一..." />
+    <meta name="keywords" content="Android" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <!-- <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script> -->
+    <script src="/media/js/highlight/highlight.min.js"></script>
+    <script src="/media/js/sroll_markdown_titile_list.js"></script>
+    <link rel="stylesheet" type="text/css" href="/media/js/highlight/styles/atom-one-dark.css">
+    <script>hljs.highlightAll();</script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://kanyewestforreal.github.io/">
+  <img class="avatar" src="https://kanyewestforreal.github.io//images/avatar.png?v=1741497022322" alt="">
+  </a>
+  <h1 class="site-title">
+    Grinofith&#39;s Blog
+  </h1>
+  <p class="site-description">
+    The key is seriously reflecting.
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              关于ViewPager无限循环问题
+            </h2>
+            <div class="post-info">
+              <span>
+                2022-12-03
+              </span>
+              <span>
+                2 min read
+              </span>
+              
+                <a href="https://kanyewestforreal.github.io/tag/AndroidTAG/" class="post-tag">
+                  # Android
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://kanyewestforreal.github.io//post-images/the_infinity_of_viewpager_scrolling.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>If this cover violates your rights, please contact me</p>
+<p>背景：最近为了完善音乐播放器的滑动播放功能，选择在展开这方面的尝试。</p>
+</blockquote>
+<h2 id="对于题目展示的问题根据网上资料总结一共有三种办法">对于题目展示的问题，根据网上资料总结一共有三种办法。</h2>
+<h3 id="第一种通过设置viewpager的adapter的getcount方法返回integermax_value获得无限多的item造成一种伪循环的效果">第一种：通过设置ViewPager的Adapter的getCount方法，返回Integer.MAX_VALUE，获得无限多的Item，造成一种伪循环的效果。</h3>
+<p>但实际在尝试中感觉并不理想，尤其是ViewPager的Item中含有动画时，容易造成ANR，即使选择getCount中乘以40倍的Size返回也容易造成ANR。</p>
+<h3 id="第二种通过对数据首尾互相添加假数据的效果然后通过setcurrentitem实现无限循环的方法-smoothscroll选择false取消动画">第二种：通过对数据首尾互相添加假数据的效果，然后通过setCurrentItem实现无限循环的方法。（smoothScroll选择false，取消动画）</h3>
+<pre><code>    mSongs.addAll(songList);
+    //丑陋地添加首尾数据的代码
+    
+    Song temp1 = mSongs.get(0);
+    Song temp2 = mSongs.get(mSongs.size() - 1);
+
+    mSongs.add(0, temp2);
+    mSongs.add(mSongs.size(), temp1);
+</code></pre>
+<p>这里，我选择在传入数据时，通过代码添加。接下来就是，可以选择在ViewPager的onPageScrollStateChanged使用setCurrentItem方法了，不过还建议在onPageSelected中设置一个boolean，判断是否在滑动以节省资源。</p>
+<pre><code>        @Override
+        public void onPageSelected(int position) {
+        	    //选择取消唱片动画
+        	    //回调提醒Song已经改变
+            mIsChanged = true;
+            if (position &gt; currentItem) {
+                notifyMusicStatusChanged(MusicChangedStatus.NEXT);
+            } else {
+                notifyMusicStatusChanged(MusicChangedStatus.LAST);
+            }
+
+            if(position == 0){
+                currentItem = mSongs.size()-2;
+            }else if(position== mSongs.size()-1){
+                currentItem = 1;
+            }else {
+                currentItem = position;
+            }
+
+        }
+
+        @Override
+        public void onPageScrollStateChanged(int state) {
+
+            if (state == ViewPager.SCROLL_STATE_IDLE) {
+                //动画
+
+                //防止在Scroll时，再次更新动画导致，发生ANR
+                if (mIsChanged) {
+                    mIsChanged = false;
+                    mVpContain.setCurrentItem(currentItem, false);
+                }
+            }
+        }
+    });
+</code></pre>
+<p>如果，除了有滑动实现切换的方法外，比如点击按钮也会切换，记得处理好点击按钮的逻辑。</p>
+<h3 id="第三种其实是第二种的变种选择在viewpager的adapter的finishupdate中完成setcurrentitem方法这种方法应该比第二种更能节省资源同时也不需要多一个量记录viewpager是否在动画中">第三种：其实是第二种的变种，选择在ViewPager的Adapter的finishUpdate中完成setCurrentItem方法，这种方法应该比第二种更能节省资源，同时也不需要多一个量记录ViewPager是否在动画中。</h3>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E5%AF%B9%E4%BA%8E%E9%A2%98%E7%9B%AE%E5%B1%95%E7%A4%BA%E7%9A%84%E9%97%AE%E9%A2%98%E6%A0%B9%E6%8D%AE%E7%BD%91%E4%B8%8A%E8%B5%84%E6%96%99%E6%80%BB%E7%BB%93%E4%B8%80%E5%85%B1%E6%9C%89%E4%B8%89%E7%A7%8D%E5%8A%9E%E6%B3%95">对于题目展示的问题，根据网上资料总结一共有三种办法。</a>
+<ul>
+<li><a href="#%E7%AC%AC%E4%B8%80%E7%A7%8D%E9%80%9A%E8%BF%87%E8%AE%BE%E7%BD%AEviewpager%E7%9A%84adapter%E7%9A%84getcount%E6%96%B9%E6%B3%95%E8%BF%94%E5%9B%9Eintegermax_value%E8%8E%B7%E5%BE%97%E6%97%A0%E9%99%90%E5%A4%9A%E7%9A%84item%E9%80%A0%E6%88%90%E4%B8%80%E7%A7%8D%E4%BC%AA%E5%BE%AA%E7%8E%AF%E7%9A%84%E6%95%88%E6%9E%9C">第一种：通过设置ViewPager的Adapter的getCount方法，返回Integer.MAX_VALUE，获得无限多的Item，造成一种伪循环的效果。</a></li>
+<li><a href="#%E7%AC%AC%E4%BA%8C%E7%A7%8D%E9%80%9A%E8%BF%87%E5%AF%B9%E6%95%B0%E6%8D%AE%E9%A6%96%E5%B0%BE%E4%BA%92%E7%9B%B8%E6%B7%BB%E5%8A%A0%E5%81%87%E6%95%B0%E6%8D%AE%E7%9A%84%E6%95%88%E6%9E%9C%E7%84%B6%E5%90%8E%E9%80%9A%E8%BF%87setcurrentitem%E5%AE%9E%E7%8E%B0%E6%97%A0%E9%99%90%E5%BE%AA%E7%8E%AF%E7%9A%84%E6%96%B9%E6%B3%95-smoothscroll%E9%80%89%E6%8B%A9false%E5%8F%96%E6%B6%88%E5%8A%A8%E7%94%BB">第二种：通过对数据首尾互相添加假数据的效果，然后通过setCurrentItem实现无限循环的方法。（smoothScroll选择false，取消动画）</a></li>
+<li><a href="#%E7%AC%AC%E4%B8%89%E7%A7%8D%E5%85%B6%E5%AE%9E%E6%98%AF%E7%AC%AC%E4%BA%8C%E7%A7%8D%E7%9A%84%E5%8F%98%E7%A7%8D%E9%80%89%E6%8B%A9%E5%9C%A8viewpager%E7%9A%84adapter%E7%9A%84finishupdate%E4%B8%AD%E5%AE%8C%E6%88%90setcurrentitem%E6%96%B9%E6%B3%95%E8%BF%99%E7%A7%8D%E6%96%B9%E6%B3%95%E5%BA%94%E8%AF%A5%E6%AF%94%E7%AC%AC%E4%BA%8C%E7%A7%8D%E6%9B%B4%E8%83%BD%E8%8A%82%E7%9C%81%E8%B5%84%E6%BA%90%E5%90%8C%E6%97%B6%E4%B9%9F%E4%B8%8D%E9%9C%80%E8%A6%81%E5%A4%9A%E4%B8%80%E4%B8%AA%E9%87%8F%E8%AE%B0%E5%BD%95viewpager%E6%98%AF%E5%90%A6%E5%9C%A8%E5%8A%A8%E7%94%BB%E4%B8%AD">第三种：其实是第二种的变种，选择在ViewPager的Adapter的finishUpdate中完成setCurrentItem方法，这种方法应该比第二种更能节省资源，同时也不需要多一个量记录ViewPager是否在动画中。</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://kanyewestforreal.github.io/post/start-at-1212022/">
+              <h3 class="post-title">
+                Start At 12.1.2022
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  This blog is just for me to record the questions, which in my developing.
+  <a class="rss" href="https://kanyewestforreal.github.io//atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

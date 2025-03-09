@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://kanyewestforreal.github.io/</id>
+    <title>Grinofith&apos;s Blog</title>
+    <updated>2025-03-09T08:07:52.172Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://kanyewestforreal.github.io/"/>
+    <link rel="self" href="https://kanyewestforreal.github.io/atom.xml"/>
+    <subtitle>The key is seriously reflecting.</subtitle>
+    <logo>https://kanyewestforreal.github.io/images/avatar.png</logo>
+    <icon>https://kanyewestforreal.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2025, Grinofith&apos;s Blog</rights>
+    <entry>
+        <title type="html"><![CDATA[Android Jetpack(1) Lifecycle源码阅读记录——P1]]></title>
+        <id>https://kanyewestforreal.github.io/post/android-jetpack1-lifecycle-p1/</id>
+        <link href="https://kanyewestforreal.github.io/post/android-jetpack1-lifecycle-p1/">
+        </link>
+        <updated>2025-03-03T08:29:31.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[HashMap番外篇——SafeIterableMap 重点]]></title>
+        <id>https://kanyewestforreal.github.io/post/hashmap-safeiterablemap-knowledge/</id>
+        <link href="https://kanyewestforreal.github.io/post/hashmap-safeiterablemap-knowledge/">
+        </link>
+        <updated>2025-02-26T07:29:46.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[HashMap 知识点]]></title>
+        <id>https://kanyewestforreal.github.io/post/hashmap-knowledge/</id>
+        <link href="https://kanyewestforreal.github.io/post/hashmap-knowledge/">
+        </link>
+        <updated>2025-02-24T07:45:35.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Interlude]]></title>
+        <id>https://kanyewestforreal.github.io/post/interlude/</id>
+        <link href="https://kanyewestforreal.github.io/post/interlude/">
+        </link>
+        <updated>2025-02-12T14:12:04.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[自定义View储备知识]]></title>
+        <id>https://kanyewestforreal.github.io/post/custom_view_backup/</id>
+        <link href="https://kanyewestforreal.github.io/post/custom_view_backup/">
+        </link>
+        <updated>2023-05-08T01:22:53.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[自定义View入门知识]]></title>
+        <id>https://kanyewestforreal.github.io/post/custom_view/</id>
+        <link href="https://kanyewestforreal.github.io/post/custom_view/">
+        </link>
+        <updated>2023-04-19T12:47:15.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[算法小结]]></title>
+        <id>https://kanyewestforreal.github.io/post/algorithm_summary/</id>
+        <link href="https://kanyewestforreal.github.io/post/algorithm_summary/">
+        </link>
+        <updated>2023-04-09T13:16:40.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Retrofit的简单介绍]]></title>
+        <id>https://kanyewestforreal.github.io/post/thinking_in_retrofit/</id>
+        <link href="https://kanyewestforreal.github.io/post/thinking_in_retrofit/">
+        </link>
+        <updated>2023-03-12T08:10:35.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[关于RemoteView多次设置图片导致其消失的情况]]></title>
+        <id>https://kanyewestforreal.github.io/post/remoteview-with-bitmap-anr/</id>
+        <link href="https://kanyewestforreal.github.io/post/remoteview-with-bitmap-anr/">
+        </link>
+        <updated>2022-12-15T11:58:58.000Z</updated>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[关于使用自定义View FloatingButtonMenu，实现随同RecycleView滚动隐藏问题]]></title>
+        <id>https://kanyewestforreal.github.io/post/custom-view-floatingbuttonmenu-with-recycleview-scrolling/</id>
+        <link href="https://kanyewestforreal.github.io/post/custom-view-floatingbuttonmenu-with-recycleview-scrolling/">
+        </link>
+        <updated>2022-12-03T05:59:13.000Z</updated>
+    </entry>
+</feed>

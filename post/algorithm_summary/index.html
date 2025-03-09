@@ -1,0 +1,913 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>算法小结 | Grinofith&#39;s Blog</title>
+<link rel="shortcut icon" href="https://kanyewestforreal.github.io//favicon.ico?v=1741497022322">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://kanyewestforreal.github.io//styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="算法小结 | Grinofith&#39;s Blog - Atom Feed" href="https://kanyewestforreal.github.io//atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="随手记录一下，跟yxc大佬学过的一些算法。
+虽然学的时间不长，但还是有收获，不过比赛纯纯坐牢了。
+快排
+/*
+ * 笔记：
+ * 快速排序基于分治思想。
+ * 步骤如下：
+ * 1. 确定分界点x,x=(l+r)/2
+ *
+ * 2. 调整..." />
+    <meta name="keywords" content="Algorithm" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <!-- <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script> -->
+    <script src="/media/js/highlight/highlight.min.js"></script>
+    <script src="/media/js/sroll_markdown_titile_list.js"></script>
+    <link rel="stylesheet" type="text/css" href="/media/js/highlight/styles/atom-one-dark.css">
+    <script>hljs.highlightAll();</script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://kanyewestforreal.github.io/">
+  <img class="avatar" src="https://kanyewestforreal.github.io//images/avatar.png?v=1741497022322" alt="">
+  </a>
+  <h1 class="site-title">
+    Grinofith&#39;s Blog
+  </h1>
+  <p class="site-description">
+    The key is seriously reflecting.
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              算法小结
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-04-09
+              </span>
+              <span>
+                18 min read
+              </span>
+              
+                <a href="https://kanyewestforreal.github.io/tag/iJB-n07ue/" class="post-tag">
+                  # Algorithm
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://cdnb.artstation.com/p/assets/images/images/053/565/707/large/jianfeng-allan-li-dune3-4k.jpg?1662506567" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>随手记录一下，跟yxc大佬学过的一些算法。</p>
+<p>虽然学的时间不长，但还是有收获，不过比赛纯纯坐牢了。</p>
+<h2 id="快排">快排</h2>
+<pre><code class="language-java">/*
+ * 笔记：
+ * 快速排序基于分治思想。
+ * 步骤如下：
+ * 1. 确定分界点x,x=(l+r)/2
+ *
+ * 2. 调整区间（重点）：把区间状态修改为：x左边的数小于x,右边的数大于x
+ *
+ * 3. 递归处理左右两端，注意处理l&gt;=r的边界情况，要return
+ *
+ * 如何处理第二步重点？
+ * 1. 设i在l−1位置，j在r+1位置。
+ * 2. 移动指针i，直到碰到一个大于x的数。
+ * 3. 移动指针j，直到碰到一个小于x的数。
+ * 4. swap(ai,aj)
+ * 5. 重复执行2~4步，直到ij相遇。
+ */
+
+//acwing.com/activity/content/problem/content/819/
+class QuickSort {
+    public static void main(String[] args) throws IOException {
+        QuickSort m = new QuickSort();
+        //BR
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        int amount = Integer.parseInt(br.readLine());
+        int[] nums = new int[amount];
+
+        String[] res = br.readLine().split(&quot; &quot;);
+        for (int i = 0; i &lt; amount; i++) {
+            nums[i] = Integer.parseInt(res[i]);
+        }
+
+        m.quickSort(nums, 0, amount - 1);
+
+        for (int i = 0; i &lt; amount; i++) {
+            System.out.print(nums[i] + &quot; &quot;);
+        }
+        br.close();
+    }
+
+    //分治(动态分步？)
+    public void quickSort(int[] nums, int leftIndex, int rightIndex) {
+
+        //判断指针是否越过(/数组长度不够)
+        if (leftIndex &gt;= rightIndex) return;
+
+        //基准值 ！！！：应该取于数组，而不是index，每一次pivot都不同
+
+        int pivot = nums[(leftIndex + rightIndex) &gt;&gt; 1];
+        // &gt;&gt; 1 等于除以2
+
+        //指向真正的边界
+        //因为先do while再swap
+        int i = leftIndex - 1, j = rightIndex + 1;
+
+        //没有相遇/越过,一直向中间移动
+        while (i &lt; j) {
+            do i++; while (nums[i] &lt; pivot);
+
+            do j--; while (nums[j] &gt; pivot);
+
+            //能执行到此，表示以上两个while已经不成立，到了需要交换的情况
+            //判断指针是否相遇/越过。如果是，没必要进行交换，因为元素已经待在需要在的左右边，代表这一轮没有需要交换的位置。
+            if (i &lt; j) {
+                int temp = nums[i];
+                nums[i] = nums[j];
+                nums[j] = temp;
+            }
+        }
+
+        //while循环结束后，q[l, j] &lt;= x,q[j+1, r] &gt;= x
+        //然后分成两段，递归处理，取到边界会导致递归死循环
+        //即n分成0和n，或 n分成n和0,这会造成无限划分
+
+        /*
+         * 向上取整：比自己大的最小整数；
+         * 向下取整：比自己小的最大整数；
+         */
+
+        /*
+         * 用i则不能取到左边界，需要把x取值改成向上取整(l+r+1)
+         * 用j则不能取到右边界，需要把x取值改成向下取整(l+r)
+         */
+
+        // 以x=nums[l+r+1 &gt;&gt; 1], 如果用j为例
+
+        // 由于+1，使得x向上取整,当只存在两个元素时，x始终是右边界，则j不会移动，而i移动。
+        // 到一定程度后，i移动到与基准值[边界]、j重合。
+
+        // 此时再进入下一层循环，传入的leftindex=rightindex=j，分成0和n，造成无限划分
+
+        //所以用右向下取，用左向下取
+
+        quickSort(nums, leftIndex, j);
+        //递归处理左边
+
+
+        quickSort(nums, j + 1, rightIndex);
+        //递归处理右边
+
+    }
+    //模版
+    /*
+    *
+    * public static void quickSort(int[] q,int l,int r){
+        if(l&gt;=r)return;
+        int i = l-1, j = r+1, x = q[l+r&gt;&gt;1]; //重要
+        while(i&lt;j){
+            do i++; while(q[i]&lt;x);
+            do j--; while(q[j]&gt;x);
+            if(i&lt;j){
+                int tmp = q[i];
+                q[i]=q[j];
+                q[j]=tmp;
+            }
+        }
+        quickSort(q,l,j); //重要
+        quickSort(q,j+1,r);
+    }
+    *
+    *
+    * */
+}
+
+</code></pre>
+<h2 id="归并排序">归并排序</h2>
+<pre><code class="language-java">//https://www.acwing.com/activity/content/problem/content/821/
+class MergeSort {
+    static int[] q;
+    static int num;
+
+    static int[] temp;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        num = Integer.parseInt(br.readLine());
+        temp = new int[num];
+        q = Arrays.stream(br.readLine().split(&quot; &quot;)).mapToInt(Integer::parseInt).toArray();
+
+        mergeSort(q,0, num-1 );
+
+        for (int value : temp) {
+            System.out.print(value + &quot; &quot;);
+        }
+
+    }
+
+    static void mergeSort(int[] q, int l, int r) {
+        if (l &gt;= r) {
+            return;
+        }
+        int mid = l + r &gt;&gt; 1;
+        mergeSort(q, l, mid);
+        mergeSort(q,mid + 1, r);
+
+        int k = 0;
+        int i = l, j = mid + 1;
+        while (i &lt;= mid &amp;&amp; j &lt;= r) {
+            if (q[i] &gt;= q[j]){
+                temp[k++] = q[j++];
+            }else {
+                temp[k++] = q[i++];
+            }
+        }
+
+        //左数组没有归并完
+        while(i&lt;=mid){
+            temp[k++] = q[i++];
+        }
+
+        //右数组没有归并完
+        while(j&lt;=r){
+            temp[k++] = q[j++];
+        }
+
+        //需要把每一次归并的结果给记录到数组中，然后再进行下次归并
+        //每次进入一次递归 tmp都会变
+        for (i = l, j = 0; i &lt;= r; i ++, j ++ ) q[i] = temp[j];
+
+    }
+}
+</code></pre>
+<h2 id="dfs深搜">DFS深搜</h2>
+<pre><code class="language-java">/**
+ * 深搜关键:回溯、剪枝、恢复现场
+ * O(h)
+ * 不一定最短路径
+ * DFS组成：递归结束条件的选择+状态标记+递归后的恢复
+ * */
+
+//https://www.acwing.com/activity/content/problem/content/905/
+public class DFSSorting {
+    static int n;
+    static boolean[] used;
+    //表示数字是否被使用
+    static int[] answer;
+
+    //显示排序数组
+
+    public static void main(String args[]) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        //+1才能表示完数
+        //或者直接开辟一个足够大的空间
+        used = new boolean[n+1];
+
+        answer = new int[n];
+        br.close();//!!!
+
+        //从0开排
+        dfs(0);
+    }
+
+    //num表示第几个空位
+    static void dfs(int num){
+        if (num == n){
+            //空位满了
+            for(int i = 0; i &lt; n; i++){
+                System.out.print(answer[i]+&quot; &quot;);
+            }
+            System.out.println();
+        } else {
+            //待放的数i
+            for (int i = 1; i &lt;= n; i++) {
+                //如果数没放
+                if (!used[i]) {
+                    answer[num] = i;
+                    used[i] = true;
+
+                    dfs(num + 1);
+                    //从这里开始回溯
+
+                    //递归调用，后恢复现场
+                    used[i] = false;
+                }
+            }
+        }
+    }
+}
+</code></pre>
+<pre><code class="language-java">//八皇后原题：https://www.acwing.com/activity/content/problem/content/906/
+public class DFSQueens1 {
+    static int n;
+
+    static boolean[] column, dg, udg;
+    //只需要考虑列，num既可以表示第几个皇后，也可以表示第几行
+    static char[][] answer;
+
+    //显示排序数组
+
+    public static void main(String args[]) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        br.close();
+
+        column = new boolean[n];
+
+        dg = new boolean[2 * n - 1];
+        udg = new boolean[2 * n - 1];
+
+        answer = new char[n][n];
+        for (int i = 0; i &lt; n; i++) {
+            for (int j = 0; j &lt; n; j++) {
+                answer[i][j] = '.';
+            }
+        }
+        dfs(0);
+
+    }
+
+    //num表示第几个皇后
+    static void dfs(int num) {
+        if (num == n) {
+            //结束条件
+            for (int i = 0; i &lt; n; i++) {
+                for (int j = 0; j &lt; n; j++) {
+                    System.out.print(answer[i][j]);
+                }
+                System.out.println(&quot;&quot;);
+            }
+            return;
+        }
+        for (int i = 0; i &lt; n; i++) {
+            //num + i 可以理解为行+列
+            //i表示列
+            //n可以理解为边长，反对角线从左下角开始标号
+            //正对角线第2条的坐标为（2，0），（1，1），（0，2）...此时发现把行坐标+列坐标，即可表示第几条对角线
+
+            //剪枝
+            if (!column[i] &amp;&amp; !dg[num + i] &amp;&amp; !udg[n - num + i-1]) {
+                answer[num][i] = 'Q';
+                column[i] = dg[num + i] = udg[n-num + i-1] = true;
+
+                dfs(num + 1);
+
+                column[i] = dg[num + i] = udg[n-num + i-1] = false;
+                answer[num][i] = '.';
+
+            }
+        }
+    }
+}
+</code></pre>
+<pre><code class="language-java">//原始写法
+//枚举：能放皇后吗？
+// 1：能放；
+// 2：不能，则转跳下一个格子，查看是否能放皇后。
+
+//https://www.acwing.com/activity/content/problem/content/906/
+public class DFSQueens2 {
+    static int n;
+
+    static boolean[] rows, columns, dg, udg;
+    //只需要考虑列，num既可以表示第几个皇后，也可以表示第几行
+    static char[][] answer;
+
+    //显示排序数组
+
+    public static void main(String args[]) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        n = Integer.parseInt(br.readLine());
+        br.close();
+
+        columns = new boolean[n];
+        rows = new boolean[n];
+
+        dg = new boolean[2 * n - 1];
+        udg = new boolean[2 * n - 1];
+
+        answer = new char[n][n];
+        for (int i = 0; i &lt; n; i++) {
+            for (int j = 0; j &lt; n; j++) {
+                answer[i][j] = '.';
+            }
+        }
+
+        dfs(0 , 0, 0);
+
+
+    }
+
+    //num表示第几个皇后
+
+    //row行数
+    //column列数
+    static void dfs(int x, int y, int num) {
+        //越过最后一列，直接换列
+        //偷懒，不写换行的代码
+        if (y == n) {
+            y = 0;
+            x++;
+        }
+        if (x == n) {
+            if (num == n) {
+                //原始逻辑
+                //到最后一行也不能判断皇后是否放完
+                //还有列没有试完
+                for (int i = 0; i &lt; n; i++) {
+                    for (int j = 0; j &lt; n; j++) {
+                        System.out.print(answer[i][j]);
+                    }
+                    System.out.println(&quot;&quot;);
+                }
+            }
+            return;
+        }
+
+        dfs(x, y + 1, num);
+        //可以理解为创建一个状态空间（树分支？）
+
+        //放皇后
+        if (!rows[x] &amp;&amp; !columns[y] &amp;&amp; !dg[x + y] &amp;&amp; !udg[n - x + y -1]) {
+            answer[x][y] = 'Q';
+            columns[x] = dg[x + y] = udg[n - x + y - 1] = true;
+
+            dfs(x, y + 1,  num + 1);
+
+            columns[x] = dg[x + y] = udg[n - x + y - 1] = false;
+
+            answer[x][y] = '.';
+        }
+
+        //不放皇后
+        }
+}
+</code></pre>
+<h2 id="bfs宽搜">BFS宽搜</h2>
+<p>//TODO：由于笔记文件在另一台电脑，所以待补充</p>
+<pre><code class="language-java">//https://www.acwing.com/activity/content/problem/content/908/
+
+public class BFSPuzzle2 {
+    static int[] dx = new int[]{0, -1, 0, 1};
+    static int[] dy = new int[]{1, 0, -1, 0};
+
+    static String end = &quot;12345678x&quot;;
+
+
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String start = br.readLine().replace(&quot; &quot;, &quot;&quot;);
+        System.out.println(bfs(start));
+    }
+
+    static void swap(char[] chars,int xIndex,int targetIndex){
+        char temp = chars[xIndex];
+        chars[xIndex] = chars[targetIndex];
+        chars[targetIndex] = temp;
+    }
+
+    static Integer bfs(String s){
+        Queue&lt;String&gt; q = new LinkedList&lt;&gt;();
+        HashMap&lt;String, Integer&gt; dist = new HashMap&lt;&gt;();
+
+        //初始状态入队
+        q.offer(s);
+        //存初始状态，以及距离
+        dist.put(s, 0);
+
+        //如果队列不空
+        while(!q.isEmpty()){
+
+            String p = q.poll();
+
+            //超耐磨，少些点bug
+            int xIndex = p.indexOf(&quot;x&quot;);
+
+            //一维转二维坐标
+            int x = xIndex/3, y = xIndex % 3;
+
+
+            if (p.equals(end)) return dist.get(p);
+
+            //上下左右走
+            for (int i = 0; i &lt; 4; i++) {
+                int a = x+dx[i],
+                b = y+dy[i];
+
+                //没有越界
+                //0,1,2 千万记得!!!!!!!!!!!!
+                if (a&gt;=0 &amp;&amp; a&lt; 3 &amp;&amp; b&gt;= 0 &amp;&amp; b&lt; 3){
+                    //修改状态
+                    char[] chars = p.toCharArray();
+
+                    //新二维坐标转一维坐标
+                    //比如xIndex = 5;
+                    //坐标从(0,0)开始
+                    //则x = 1,y = 2;
+                    //i=1时，
+                    //new x = 0, new y = 2;
+                    //则new xIndex = 2
+
+                    //x=3, y=3 无法到if体内
+                    swap(chars,xIndex, a*3+b);
+                    String newS = String.valueOf(chars);
+
+                    if (dist.get(newS) == null){
+                        q.offer(newS);
+
+                        dist.put(newS, dist.get(p)+1);
+                    }
+
+                }
+            }
+        }
+        return -1;
+    }
+
+}
+</code></pre>
+<h2 id="二分">二分</h2>
+<h3 id="整数二分">整数二分</h3>
+<pre><code class="language-java">//整数二分法模板
+//二分的本质不是单调性, 单调性的题目一定可以二分, 可以二分的题目不一定有单调性
+//
+//二分的本质是边界
+//二分法用于查找, 每次都选择答案所在的区间再次进行查找, 当区间长度为 1时, 就是答案
+
+//一般二分应用于无非下面这四种情况:
+//1：找大于等于数的第一个位置 （满足某个条件的第一个数）
+//        2：找小于等于数的最后一个数 （满足某个条件的最后一个数）
+//        3.查找最大值 （满足该边界的右边界）、
+//        4.查找最小值 (满足该边界的左边界)
+
+/*
+ * 记忆方面：
+ * 来自视频评论区下方的一句话 : 有加必有减
+ *
+ * int mid = l + r + 1 (加)&gt;&gt; 1;
+ * if (check(mid)) l = mid;
+ * else r = mid - 1  (减);
+ *
+ * */
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+
+//https://www.acwing.com/problem/content/description/791/
+public class IntegerBinarySearch {
+
+//选用哪个模版，需要看check函数（判断条件），判断的是右边还是左边是符合的区间
+//有时候两个模版都会使用
+
+//查找左边界 SearchLeft 简写SL
+/*
+    int SL(int l, int r)
+    {
+        while (l &lt; r)
+        {
+            int mid = l + r &gt;&gt; 1;
+            if (check(mid)) r = mid; //r=mid，就不用补+1
+            else l = mid + 1;
+        }
+        return l;
+    }
+
+ */
+    //查找右边界 SearchRight 简写SR
+/*
+    int SR(int l, int r)
+    {
+        while (l &lt; r)
+        {
+            int mid = l + r + 1 &gt;&gt; 1; //需要+1 防止死循环
+            if (check(mid)) l = mid; //l=mid，需要补+1
+            else r = mid - 1;
+        }
+        return r;
+    }
+
+ */
+    static int nums;
+    static int times;
+    static int[] q;
+    static int[] search;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String[] s1 = br.readLine().split(&quot; &quot;);
+        nums = Integer.parseInt(s1[0]);
+        times = Integer.parseInt(s1[1]);
+        search = new int[times];
+        q = Arrays.stream(br.readLine().split(&quot; &quot;)).mapToInt(Integer::parseInt).toArray();
+
+        for (int i = 0; i &lt; times; i++) {
+            search[i] = Integer.parseInt(br.readLine());
+        }
+
+        br.close();
+
+        binary_search();
+    }
+
+    static void binary_search() {
+        int count = 0;
+
+        //对于可能含有重复数字的数组，使用一种二分模版去寻找，只会找到第一个/最后一个符合check的值
+        //所以需要使用两个模版
+        //对于寻找最大值、最小值，一般使用一个模版
+        while(count &lt; times) {
+            int l = 0;
+            int r = nums - 1;
+            //查找第一个大于等于目标的值
+            while (l &lt; r) {
+                //每一次都得计算新的mid ！！！！！！！！
+                int mid = l + r &gt;&gt; 1;
+                if (q[mid] &gt;= search[count]){
+                    r = mid;
+                }else {
+                    l = mid + 1;
+                }
+            }
+            //到这里已经二分到最后一个数留下
+
+            //如果这个数不满足需要查找的数
+            //直接返回-1
+            if (q[l] != search[count]) {
+                System.out.print(&quot;-1 -1&quot;);
+            }else {
+                //输出目标的起始位置
+                System.out.print(l+&quot; &quot;);
+
+                //查找最后一个小于等于目标的值
+                l = 0;
+                r = nums - 1;
+
+                while (l &lt; r){
+                    int mid = l + r + 1&gt;&gt; 1;
+                    if (q[mid] &lt;= search[count]){
+                        l = mid;
+                    }else {
+                        r = mid - 1;
+                    }
+                }
+                System.out.println(r);
+            }
+            count++;
+
+
+        }
+    }
+
+}
+</code></pre>
+<h3 id="浮点数二分精度求解">浮点数二分（精度求解）</h3>
+<pre><code class="language-java">//https://www.acwing.com/problem/content/description/792/
+//给定一个数，找到它的三次方根
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+
+public class DoubleBinarySearch {
+    static final double ma = 1e-6;
+    //表示精度，取决于题目对精度的要求, 一般比所求精度高 2
+    //保留四位,一般精确度选择1e-6;六位：1e-8;
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        double x = Double.parseDouble(br.readLine());
+        binary_search(x);
+    }
+
+    //直接在范围搜索！！！！
+    //首先只考虑n&gt;0的情况
+    //n&gt;1,n的三次幂大于n
+    //n&lt;1，n的三次幂小于n
+    //因此r的值不能一概而论为Math.abs(n)
+    static void binary_search(double x) {
+        double r = 10000;
+        double l = -10000;
+
+        while(r - l &gt; ma) {
+            //double，选择/2
+            //必须放入循环中，这样才能更新mid
+            double mid = (l + r) / 2;
+            if (mid*mid*mid &gt;= x){
+                r = mid;
+            }else {
+                //不需要-1/+1，因为当ma足够小时，可以忽略误差，l+r/2可以逼近答案
+                l = mid;
+            }
+        }
+        System.out.printf(&quot;%.6f&quot;, l);
+
+
+
+    }
+
+}
+</code></pre>
+<h2 id="动态规划dp">动态规划DP</h2>
+<p>//DP实际上是BFS的子问题</p>
+<pre><code class="language-java">//动态规划是不断决策求最优解的过程
+/*
+闫式dp法：
+动态规划有两个要点：状态与状态转移
+那么阶段自然也应该有两个：状态表示和状态计算
+
+具体可以观看：https://www.cnblogs.com/IzayoiMiku/p/13635809.html
+ */
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Arrays;
+
+//https://www.acwing.com/problem/content/2/
+public class YorNDp {
+
+    static int N;
+    static int V;
+
+    static int[] itemV;
+
+    static int[] itemW;
+
+    static int[] F; //状态方程，根据需要 属性表示价值，f则表示最大价值
+
+    public static void main(String[] args) throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        String[] s = br.readLine().split(&quot; &quot;);
+        N = Integer.parseInt(s[0]);
+        V = Integer.parseInt(s[1]);
+
+        //第一个物品价值为0
+        itemV = new int[N + 1];
+        itemW = new int[N + 1];
+        //N+1 V+1 !!!!!! 不全是N+1！！！！！
+        F = new int[V + 1];
+
+        //第一个物品开始
+        for (int i = 1; i &lt;= N; i++) {
+            String[] temp = br.readLine().split(&quot; &quot;);
+            itemV[i] = Integer.parseInt(temp[0]);
+            itemW[i] = Integer.parseInt(temp[1]);
+        }
+
+        for (int i = 1; i &lt;= N; i++) {
+            //
+            for (int j = V; j &gt;= itemV[i]; j--) {
+                F[j] = Math.max(F[j], F[j - itemV[i]] + itemW[i]);
+
+            }
+        }
+    }
+}
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E5%BF%AB%E6%8E%92">快排</a></li>
+<li><a href="#%E5%BD%92%E5%B9%B6%E6%8E%92%E5%BA%8F">归并排序</a></li>
+<li><a href="#dfs%E6%B7%B1%E6%90%9C">DFS深搜</a></li>
+<li><a href="#bfs%E5%AE%BD%E6%90%9C">BFS宽搜</a></li>
+<li><a href="#%E4%BA%8C%E5%88%86">二分</a>
+<ul>
+<li><a href="#%E6%95%B4%E6%95%B0%E4%BA%8C%E5%88%86">整数二分</a></li>
+<li><a href="#%E6%B5%AE%E7%82%B9%E6%95%B0%E4%BA%8C%E5%88%86%E7%B2%BE%E5%BA%A6%E6%B1%82%E8%A7%A3">浮点数二分（精度求解）</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8A%A8%E6%80%81%E8%A7%84%E5%88%92dp">动态规划DP</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://kanyewestforreal.github.io/post/thinking_in_retrofit/">
+              <h3 class="post-title">
+                Retrofit的简单介绍
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  This blog is just for me to record the questions, which in my developing.
+  <a class="rss" href="https://kanyewestforreal.github.io//atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

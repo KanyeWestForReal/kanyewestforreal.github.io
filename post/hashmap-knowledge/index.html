@@ -1,0 +1,456 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HashMap 知识点 | Grinofith&#39;s Blog</title>
+<link rel="shortcut icon" href="https://kanyewestforreal.github.io//favicon.ico?v=1741497022322">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://kanyewestforreal.github.io//styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="HashMap 知识点 | Grinofith&#39;s Blog - Atom Feed" href="https://kanyewestforreal.github.io//atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="基础
+内部数据结构
+数组 + 链表/红黑树
+允许空键空值？
+允许，但是会覆盖。
+当key == null时，index 为 0，如果key 再次为 null，那么数据就会覆盖。
+static final int hash(Object ke..." />
+    <meta name="keywords" content="Java" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <!-- <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script> -->
+    <script src="/media/js/highlight/highlight.min.js"></script>
+    <script src="/media/js/sroll_markdown_titile_list.js"></script>
+    <link rel="stylesheet" type="text/css" href="/media/js/highlight/styles/atom-one-dark.css">
+    <script>hljs.highlightAll();</script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://kanyewestforreal.github.io/">
+  <img class="avatar" src="https://kanyewestforreal.github.io//images/avatar.png?v=1741497022322" alt="">
+  </a>
+  <h1 class="site-title">
+    Grinofith&#39;s Blog
+  </h1>
+  <p class="site-description">
+    The key is seriously reflecting.
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              HashMap 知识点
+            </h2>
+            <div class="post-info">
+              <span>
+                2025-02-24
+              </span>
+              <span>
+                11 min read
+              </span>
+              
+                <a href="https://kanyewestforreal.github.io/tag/java/" class="post-tag">
+                  # Java
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://kanyewestforreal.github.io//post-images/hashmap-knowledge.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="基础">基础</h1>
+<h2 id="内部数据结构">内部数据结构</h2>
+<p>数组 + 链表/红黑树</p>
+<h2 id="允许空键空值">允许空键空值？</h2>
+<p>允许，但是会覆盖。</p>
+<p>当key == null时，index 为 0，如果key 再次为 null，那么数据就会覆盖。</p>
+<pre><code class="language-java">static final int hash(Object key) {
+    int h;
+    return (key == null) ? 0 : (h = key.hashCode()) ^ (h &gt;&gt;&gt; 16);
+}
+//source：https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/util/HashMap.java#L336C1-L339C6
+</code></pre>
+<h2 id="影响性能的重要参数">影响性能的重要参数</h2>
+<p><strong>Size</strong>： HashMap的当前大小</p>
+<p><strong>Capacity</strong>： HashMap的总容量，一般是2的次幂。解释见下文 <strong>工作原理#Capacity为什么需要是2的次幂</strong></p>
+<p><strong>LoadFactor</strong>： HashMap负载因子，默认值为0.75f。</p>
+<p>衡量HashMap是否进行<strong>Resize</strong>（扩容）的条件如下：</p>
+<p><strong>HashMap.Size &gt;= Capacity * LoadFactor</strong></p>
+<hr>
+<h2 id="工作原理">工作原理</h2>
+<h3 id="put方法的原理">Put方法的原理</h3>
+<pre><code class="language-java">public V put(K key, V value) {
+    return putVal(hash(key), key, value, false, true);
+}
+//source:https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/util/HashMap.java#L618
+</code></pre>
+<p>比如调用 hashMap.put(&quot;book&quot;, 0) ，插入一个Key为“book&quot;的元素，值为0。</p>
+<p>这时使用哈希函数hash(key)，可以计算出Entry(键值对) 的插入位置（index）。</p>
+<p>但是，因为HashMap的长度是有限的，当插入的Entry越来越多时，必然会出现index冲突的情况。</p>
+<p>这时候就想到使用，把Entry对象设置为一个Node，每一个Entry对象通过Next指针指向它的下一个Entry节点。当新来的Entry映射到冲突的数组位置时，只需要插入到对应的链表即可。</p>
+<p>需要注意的是，新来的Entry节点插入链表时，使用的是<strong>头插法</strong>，是因为HashMap的发明者认为，<strong>后插入的Entry被查找的可能性更大</strong>。</p>
+<h3 id="get方法的原理">Get方法的原理</h3>
+<pre><code class="language-java">public V get(Object key) {
+    Node&lt;K,V&gt; e;
+    return (e = getNode(key)) == null ? null : e.value;
+}
+
+final Node&lt;K,V&gt; getNode(Object key) {
+        Node&lt;K,V&gt;[] tab; Node&lt;K,V&gt; first, e; int n, hash; K k;
+        if ((tab = table) != null &amp;&amp; (n = tab.length) &gt; 0 &amp;&amp;
+            (first = tab[(n - 1) &amp; (hash = hash(key))]) != null) {
+            if (first.hash == hash &amp;&amp; // always check first node
+                ((k = first.key) == key || (key != null &amp;&amp; key.equals(k))))
+                return first;
+            if ((e = first.next) != null) {
+                if (first instanceof TreeNode)
+                    return ((TreeNode&lt;K,V&gt;)first).getTreeNode(hash, key);
+                do {
+                    if (e.hash == hash &amp;&amp;
+                        ((k = e.key) == key || (key != null &amp;&amp; key.equals(k))))
+                        return e;
+                } while ((e = e.next) != null);
+            }
+        }
+        return null;
+}
+//source: https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/util/HashMap.java#L563
+//https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/util/HashMap.java#L574
+</code></pre>
+<p>首先会把输入的Key做一次Hash映射，得到对应的index，</p>
+<p>由于刚才所说的Hash冲突，同一个位置有可能匹配到多个Entry，这时候就需要顺着对应链表的头节点，一个一个向下来查找。</p>
+<h3 id="capacity为什么需要是2的次幂-hash函数使用位运算原因">Capacity为什么需要是2的次幂？&amp;&amp; Hash函数使用位运算原因</h3>
+<p>我们知道从Key映射到HashMap的对应位置Index，会用到一个hash(key)函数。</p>
+<p>首先要考虑到，需要尽可能的提升HashMap函数的查找、插入效率。那么hash得到的index应该尽可能的减少冲突，也就是数据分布均匀，同时hash计算index的速度要够快。</p>
+<p><strong>hash得到的index应该尽可能的减少冲突</strong>：Java中HashMap的默认Capability设置为 1 &lt;&lt; 4 （ aka 16 ）。</p>
+<p><strong>为什么不取10呢</strong>？这是为了数据分布的更加均匀，也就是说 <strong>需要坐落在每一个Index的概率相等</strong>。</p>
+<blockquote>
+<p>Leetcode：<a href="https://leetcode.com/problems/first-missing-positive/">41. First Missing Positive</a></p>
+<p>知道上述原理后，对于Leetcode这一题也是十分简单的。手写Hash函数，再Check 返回缺失值。</p>
+</blockquote>
+<p>否则对于</p>
+<p>101110001110101110 <strong>1111</strong> &amp; 1001 (aka Capability - 1 = 10 - 1)  = 1001</p>
+<p>101110001110101110 <strong>1011</strong> &amp; 1001 = 1001</p>
+<p>也就是说，当HashMap长度为10的时候，有些index结果的出现几率会更大，而有些index结果永远不会出现.</p>
+<p><strong>为什么不取2、4、8、32、64呢</strong>？官方没有给出解释，猜测应该是一个经验值。也许是考虑到扩容带来的性能损耗，还有空间过大带来的浪费。</p>
+<p><strong>hash计算index的速度要够快</strong>：所以选择使用位运算&amp;，而不是取模/取余运算。为什么&amp;效率更高呢？因为位运算直接对内存数据进行操作，不需要转成十进制，所以位运算要比取模运算的效率更高</p>
+<hr>
+<h2 id="多线程不安全问题">多线程不安全问题</h2>
+<h3 id="jdk17-中hashmap扩容时使用-头插法插入元素-会导致数据丢失陷入死循环">JDK1.7 中，HashMap扩容时使用 头插法插入元素 ，会导致数据丢失，陷入死循环。</h3>
+<pre><code class="language-java">/**
+ * 将当前哈希表中的所有Entry迁移到新表中（哈希表扩容/缩容核心方法）
+ * @param newTable 新哈希表数组
+ * @param rehash 是否需要重新计算哈希值（例如HashMap扩容时会触发）
+ */
+void transfer(Entry[] newTable, boolean rehash) {
+    int newCapacity = newTable.length;  // 1. 获取新表的容量（新数组长度）
+    for (Entry&lt;K,V&gt; e : table) {        // 2. 遍历旧表的每一个桶（数组位置）
+        while(null != e) {              // 3. 遍历桶中的链表（处理链表中的每一个节点）
+            Entry&lt;K,V&gt; next = e.next;  // 4. 保存下一个节点（防止链表断裂）
+            if (rehash) {              // 5. 如果需要重新计算哈希值（例如扩容时）
+                // 6. 重新计算哈希值：如果key为null则哈希=0，否则用hash()方法计算
+                e.hash = null == e.key ? 0 : hash(e.key); 
+            }
+            // 7. 计算当前节点在新表中的位置（取模运算简化为位运算）
+            int i = indexFor(e.hash, newCapacity);
+            e.next = newTable[i];       // 8. 头插法：将当前节点的next指向新表对应位置的链表头部
+            newTable[i] = e;            // 9. 将当前节点设为新链表头部
+            e = next;                   // 10. 移动到链表的下一个节点
+           
+           //newTable[i] 代表的是位置上的最上面那本书！
+            //头插法：两步走，找头头，放上去。
+           //假设新表的某个位置 i 原本已经有一摞书，现在要把一本新书 e 放在这摞书的最上面
+           //e.next = newTable[i]：把新书 e 的下一本（e.next）指向 当前书摞的最上面 那本书（newTable[i]）。此时书摞还是 书A → 书B → null，但有 e.next = 书A，此时新书 e 的下一本是书摞的顶部书。
+           //newTable[i] = e: 把整个书摞的顶部标记为新书 e。现在书摞变成 e → 书A → 书B → null，新书 e 成为新的顶部。
+        }
+    }
+}
+</code></pre>
+<h4 id="具体场景举例">🌰 具体场景举例</h4>
+<p>假设旧表长度为2，新表长度为4</p>
+<ol>
+<li>
+<p><strong>初始状态</strong>：</p>
+<ul>
+<li>旧表中有两个桶，其中桶1的链表为：<code>EntryA → EntryB → null</code>（哈希冲突导致链表结构）</li>
+<li>线程1和线程2同时触发扩容操作</li>
+</ul>
+</li>
+<li>
+<p><strong>线程1执行到步骤4</strong>：</p>
+<pre><code class="language-java">Entry&lt;K,V&gt; next = e.next;  // 线程1此时e=EntryA，next=EntryB
+// 线程1在此处被挂起...！
+</code></pre>
+</li>
+<li>
+<p><strong>线程2完整执行整个transfer</strong>：</p>
+<ul>
+<li>
+<p>线程2将<code>EntryA</code>和<code>EntryB</code>迁移到新表，由于头插法，新表中的链表变为：</p>
+<pre><code class="language-java">EntryB → EntryA → null
+</code></pre>
+</li>
+<li>
+<p>注意：头插法导致链表顺序反转</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>线程1恢复执行</strong>：</p>
+<ul>
+<li>
+<p>线程1仍持有旧的链表引用：<code>e=EntryA</code>，<code>next=EntryB</code></p>
+</li>
+<li>
+<p>继续执行迁移：</p>
+<pre><code class="language-java">int i = indexFor(e.hash, newCapacity);  // 计算EntryA的位置
+e.next = newTable[i];  // 此时新表该位置已被线程2写入EntryB，所以EntryA.next = EntryB
+newTable[i] = e;       // 将EntryA设为链表头部（此时链表变成EntryA → EntryB）
+e = next;              // e=EntryB，继续处理下一个节点
+</code></pre>
+</li>
+<li>
+<p>处理EntryB时：</p>
+<pre><code class="language-java">Entry&lt;K,V&gt; next = e.next;  // EntryB.next原本是null（线程2迁移后的状态）
+int i = indexFor(e.hash, newCapacity);
+e.next = newTable[i];      // 新表该位置当前是EntryA，所以EntryB.next = EntryA
+newTable[i] = e;           // 链表变成EntryB → EntryA → EntryB（形成环！）
+</code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>最终结果</strong>：</p>
+<ul>
+<li>新表中出现环形链表：<code>EntryB → EntryA → EntryB</code></li>
+<li>后续对该链表进行查询时，CPU会因死循环导致100%占用！</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="jdk18-中如果两个线程并发执行-put-操作并且两个数据的-hash-值冲突就可能出现数据覆盖">JDK1.8 中，如果两个线程并发执行 put 操作，并且两个数据的 hash 值冲突，就可能出现数据覆盖。</h3>
+<h4 id="具体场景举例-2">🌰 具体场景举例</h4>
+<p>假设哈希表初始状态如下：</p>
+<ul>
+<li>桶位置 <code>i</code> 为空（<code>table[i] = null</code>）。</li>
+<li>线程A和线程B同时调用 <code>put(key1, value1)</code> 和 <code>put(key2, value2)</code>，且 <code>key1</code> 和 <code>key2</code> 哈希冲突（即 <code>hash(key1) = hash(key2)</code>）。</li>
+</ul>
+<ol>
+<li>
+<p><strong>线程A执行到插入逻辑</strong>：</p>
+<pre><code class="language-java">// 伪代码：判断桶位置是否为空
+if ((p = table[i]) == null) {
+    // 直接插入新节点（线程A在此处被挂起）
+    table[i] = newNode(hash, key1, value1, null);
+}
+</code></pre>
+<ul>
+<li>线程A发现 <code>table[i]</code> 为空，准备插入新节点 <code>Node(key1, value1)</code>，但<strong>尚未执行赋值操作</strong>。</li>
+</ul>
+</li>
+<li>
+<p><strong>线程B抢占执行</strong>：</p>
+<pre><code class="language-java">if ((p = table[i]) == null) {
+    // 线程B发现table[i]仍为空（因为线程A还未执行赋值）
+    table[i] = newNode(hash, key2, value2, null);
+}
+</code></pre>
+<ul>
+<li>线程B直接插入 <code>Node(key2, value2)</code>，此时 <code>table[i]</code> 被赋值为新节点。</li>
+</ul>
+</li>
+<li>
+<p><strong>线程A恢复执行</strong>：</p>
+<pre><code class="language-java">table[i] = newNode(hash, key1, value1, null); // 覆盖线程B的插入
+</code></pre>
+<ul>
+<li>线程A继续执行赋值操作（不会再次检查table[i]是否为空），<strong>覆盖线程B已插入的节点</strong>。最终 <code>table[i]</code> 中仅保留 <code>Node(key1, value1)</code>，<code>key2</code> 的数据彻底丢失！</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="jdk-18的优化">JDK 1.8的优化</h2>
+<p>HashMap中Entry的链表长度大于阈值（默认为 8）时，就会将链表转化为红黑树（将链表转换成红黑树前会判断，如果当前数组的长度小于 64，那么会选择先进行数组扩容，而不是转换为红黑树），以减少搜索时间。</p>
+<h2 id="解决方案"><strong>解决方案</strong></h2>
+<ol>
+<li>
+<p><strong>避免共享状态</strong>：在多线程环境中，尽量为每个线程分配独立的HashMap实例。</p>
+</li>
+<li>
+<p><strong>同步锁</strong>：对HashMap的写操作加锁（如 <code>synchronized</code>），但会大幅降低性能。</p>
+<pre><code class="language-java">synchronized(map) {
+    map.put(key, value);
+}
+</code></pre>
+</li>
+<li>
+<p><strong>线程安全容器</strong>：直接使用<code>ConcurrentHashMap</code>替代HashMap，其内部通过分段锁（JDK7）或CAS+synchronized（JDK8）保证并发安全。</p>
+<pre><code class="language-java">Map&lt;String, Object&gt; safeMap = new ConcurrentHashMap&lt;&gt;();
+safeMap.put(key, value); // 无需额外同步
+</code></pre>
+</li>
+</ol>
+<hr>
+<h2 id="参考">参考</h2>
+<blockquote>
+<p>https://juejin.cn/post/6844903518264885256</p>
+<p>https://juejin.cn/post/6844903518331994119</p>
+<p>https://cloud.tencent.com/developer/article/2427109</p>
+</blockquote>
+<h1 id="进阶">进阶</h1>
+<p>ConcurrentHashMap<br>
+TODO</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%9F%BA%E7%A1%80">基础</a>
+<ul>
+<li><a href="#%E5%86%85%E9%83%A8%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84">内部数据结构</a></li>
+<li><a href="#%E5%85%81%E8%AE%B8%E7%A9%BA%E9%94%AE%E7%A9%BA%E5%80%BC">允许空键空值？</a></li>
+<li><a href="#%E5%BD%B1%E5%93%8D%E6%80%A7%E8%83%BD%E7%9A%84%E9%87%8D%E8%A6%81%E5%8F%82%E6%95%B0">影响性能的重要参数</a></li>
+<li><a href="#%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86">工作原理</a>
+<ul>
+<li><a href="#put%E6%96%B9%E6%B3%95%E7%9A%84%E5%8E%9F%E7%90%86">Put方法的原理</a></li>
+<li><a href="#get%E6%96%B9%E6%B3%95%E7%9A%84%E5%8E%9F%E7%90%86">Get方法的原理</a></li>
+<li><a href="#capacity%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E6%98%AF2%E7%9A%84%E6%AC%A1%E5%B9%82-hash%E5%87%BD%E6%95%B0%E4%BD%BF%E7%94%A8%E4%BD%8D%E8%BF%90%E7%AE%97%E5%8E%9F%E5%9B%A0">Capacity为什么需要是2的次幂？&amp;&amp; Hash函数使用位运算原因</a></li>
+</ul>
+</li>
+<li><a href="#%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8D%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98">多线程不安全问题</a>
+<ul>
+<li><a href="#jdk17-%E4%B8%ADhashmap%E6%89%A9%E5%AE%B9%E6%97%B6%E4%BD%BF%E7%94%A8-%E5%A4%B4%E6%8F%92%E6%B3%95%E6%8F%92%E5%85%A5%E5%85%83%E7%B4%A0-%E4%BC%9A%E5%AF%BC%E8%87%B4%E6%95%B0%E6%8D%AE%E4%B8%A2%E5%A4%B1%E9%99%B7%E5%85%A5%E6%AD%BB%E5%BE%AA%E7%8E%AF">JDK1.7 中，HashMap扩容时使用 头插法插入元素 ，会导致数据丢失，陷入死循环。</a>
+<ul>
+<li><a href="#%E5%85%B7%E4%BD%93%E5%9C%BA%E6%99%AF%E4%B8%BE%E4%BE%8B">🌰 具体场景举例</a></li>
+</ul>
+</li>
+<li><a href="#jdk18-%E4%B8%AD%E5%A6%82%E6%9E%9C%E4%B8%A4%E4%B8%AA%E7%BA%BF%E7%A8%8B%E5%B9%B6%E5%8F%91%E6%89%A7%E8%A1%8C-put-%E6%93%8D%E4%BD%9C%E5%B9%B6%E4%B8%94%E4%B8%A4%E4%B8%AA%E6%95%B0%E6%8D%AE%E7%9A%84-hash-%E5%80%BC%E5%86%B2%E7%AA%81%E5%B0%B1%E5%8F%AF%E8%83%BD%E5%87%BA%E7%8E%B0%E6%95%B0%E6%8D%AE%E8%A6%86%E7%9B%96">JDK1.8 中，如果两个线程并发执行 put 操作，并且两个数据的 hash 值冲突，就可能出现数据覆盖。</a>
+<ul>
+<li><a href="#%E5%85%B7%E4%BD%93%E5%9C%BA%E6%99%AF%E4%B8%BE%E4%BE%8B-2">🌰 具体场景举例</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#jdk-18%E7%9A%84%E4%BC%98%E5%8C%96">JDK 1.8的优化</a></li>
+<li><a href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><strong>解决方案</strong></a></li>
+<li><a href="#%E5%8F%82%E8%80%83">参考</a></li>
+</ul>
+</li>
+<li><a href="#%E8%BF%9B%E9%98%B6">进阶</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://kanyewestforreal.github.io/post/interlude/">
+              <h3 class="post-title">
+                Interlude
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  This blog is just for me to record the questions, which in my developing.
+  <a class="rss" href="https://kanyewestforreal.github.io//atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
